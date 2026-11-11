@@ -23,3 +23,9 @@ Copy this outline for each entry:
 - **Asked:** "Read AGENTS.md and docs/data_description_sheet.md first. Then replace the current page with a page that shows the highest 3 sales prices for each city, as well as the median and mean, computed from data/college_town_home_sales.csv."
 - **Agent produced:** Replaced the median-only table with highest, second-highest, third-highest, median, and mean sale prices for every city.
 - **Checked or changed:** Kept the existing documented $10,000 cutoff and calculated all five summaries from qualifying CSV rows.
+
+## 2026-11-11: Updating the README
+
+- **Asked:** "Can you update the README based on the current website?"
+- **Agent produced:** Replaced the starter README with documentation for the city price summary site, its data rule, live URL, tools, and citation.
+- **Checked or changed:** Compared the README with `index.html`, `docs/data_description_sheet.md`, and the Pages workflow. Confirmed the documented scope is 35,442 source rows, 35,402 qualifying sales, and 18 cities.
