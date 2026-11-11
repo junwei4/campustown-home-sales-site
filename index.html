@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Median home sale prices by city</title>
+  <title>Home sale prices by city</title>
   <link rel="icon" href="data:,">
   <style>
     :root {
@@ -106,20 +106,24 @@
 <body>
   <main>
     <header>
-      <h1>Median home sale prices by city</h1>
-      <p class="intro">How much did a typical home sell for in each college town?</p>
-      <p class="method"><strong>Rule:</strong> sales under $10,000 are left out before calculating each city’s median sale price.</p>
+      <h1>Home sale prices by city</h1>
+      <p class="intro">The highest three sale prices, median, and mean for each college town.</p>
+      <p class="method"><strong>Rule:</strong> sales under $10,000 are left out before calculating these summaries.</p>
     </header>
 
     <p id="status" role="status">Loading sales data…</p>
     <div class="table-wrap">
       <table hidden id="results">
-        <caption>Median sale price among qualifying sales, calculated from the dataset.</caption>
+        <caption>All figures are calculated from qualifying sales in the dataset.</caption>
         <thead>
           <tr>
             <th scope="col">City</th>
             <th scope="col">Qualifying sales</th>
-            <th scope="col">Median sale price</th>
+            <th scope="col">Highest sale</th>
+            <th scope="col">2nd highest</th>
+            <th scope="col">3rd highest</th>
+            <th scope="col">Median</th>
+            <th scope="col">Mean</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -176,6 +180,10 @@
       return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
     }
 
+    function mean(values) {
+      return values.reduce((total, value) => total + value, 0) / values.length;
+    }
+
     function formatCurrency(value) {
       return new Intl.NumberFormat("en-US", {
         style: "currency",
@@ -209,15 +217,26 @@
           cityCell.textContent = city;
           const countCell = document.createElement("td");
           countCell.textContent = prices.length.toLocaleString("en-US");
-          const priceCell = document.createElement("td");
-          priceCell.className = "price";
-          priceCell.textContent = formatCurrency(median(prices));
-          row.append(cityCell, countCell, priceCell);
+          const sortedPrices = prices.slice().sort((a, b) => b - a);
+          const summary = [
+            sortedPrices[0],
+            sortedPrices[1],
+            sortedPrices[2],
+            median(prices),
+            mean(prices)
+          ];
+          const priceCells = summary.map((value) => {
+            const cell = document.createElement("td");
+            cell.className = "price";
+            cell.textContent = formatCurrency(value);
+            return cell;
+          });
+          row.append(cityCell, countCell, ...priceCells);
           body.append(row);
         });
 
       document.querySelector("#status").textContent =
-        `${byCity.size} cities from ${rows.length - 1} sales, with qualifying sales counted after the $10,000 cutoff.`;
+        `${byCity.size} cities from ${rows.length - 1} sales, summarized after the $10,000 cutoff.`;
       document.querySelector("#results").hidden = false;
     }
 
