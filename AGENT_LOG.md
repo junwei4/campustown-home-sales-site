@@ -17,3 +17,9 @@ Copy this outline for each entry:
 - **Asked:** "Read AGENTS.md and docs/data_description_sheet.md first. Then replace the placeholder index.html with a page that shows the median sale price for each city, computed from data/college_town_home_sales.csv. Leave out sales under $10,000 and state that rule on the page."
 - **Agent produced:** Replaced the placeholder with a plain HTML page that loads the CSV, filters sale prices below $10,000, computes each city's median in JavaScript, and renders a responsive table.
 - **Checked or changed:** Verified all 18 city medians from the CSV with the $10,000 cutoff. The first log edit placed its closing Markdown fence incorrectly; inspection caught and fixed it.
+
+## 2026-11-11: Adding city price summaries
+
+- **Asked:** "Read AGENTS.md and docs/data_description_sheet.md first. Then replace the current page with a page that shows the highest 3 sales prices for each city, as well as the median and mean, computed from data/college_town_home_sales.csv."
+- **Agent produced:** Replaced the median-only table with highest, second-highest, third-highest, median, and mean sale prices for every city.
+- **Checked or changed:** Kept the existing documented $10,000 cutoff and calculated all five summaries from qualifying CSV rows.
