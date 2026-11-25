@@ -127,8 +127,23 @@ function groupBy(rows, keyFunction) {
   return groups;
 }
 
-function setAnswer(questionId, text) {
-  document.querySelector(`#${questionId} .answer`).textContent = text;
+function setAnswer(questionId, text, highlights = []) {
+  const answer = document.querySelector(`#${questionId} .answer`);
+  answer.replaceChildren();
+  const matches = highlights.map((value) => ({ value, index: text.indexOf(value) }))
+    .filter((match) => match.index >= 0)
+    .sort((a, b) => a.index - b.index);
+  let position = 0;
+  matches.forEach((match) => {
+    if (match.index < position) return;
+    answer.append(document.createTextNode(text.slice(position, match.index)));
+    const highlight = document.createElement("strong");
+    highlight.className = "answer-highlight";
+    highlight.textContent = match.value;
+    answer.append(highlight);
+    position = match.index + match.value.length;
+  });
+  answer.append(document.createTextNode(text.slice(position)));
 }
 
 function setExplanation(questionId, text) {
@@ -163,6 +178,7 @@ function renderDetail(questionId, headers, rows, emptyMessage = "No sales meet t
     values.forEach((value, index) => {
       const cell = index === 0 ? document.createElement("th") : document.createElement("td");
       if (index === 0) cell.scope = "row";
+      else cell.dataset.label = headers[index];
       cell.textContent = value;
       row.append(cell);
     });
@@ -180,6 +196,7 @@ function makeSvg(container, width, height, label) {
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", label);
   svg.setAttribute("focusable", "true");
+  if (window.matchMedia("(max-width: 60rem)").matches) svg.classList.add("compact-chart");
   container.append(svg);
   return svg;
 }
@@ -193,9 +210,8 @@ function svgNode(svg, tag, attributes = {}, text = "") {
 }
 
 function addTooltip(element, text) {
-  const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = text;
-  element.append(title);
+  element.setAttribute("data-tooltip", text);
+  element.setAttribute("aria-label", text);
 }
 
 function renderEmptyChart(container, message) {
@@ -210,13 +226,13 @@ function renderHorizontalChart(container, items, options) {
     return;
   }
 
-  const width = 1200;
-  const marginLeft = 430;
-  const plotWidth = 610;
-  const marginRight = 160;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 420 : 1200;
+  const marginLeft = compact ? 150 : 430;
+  const plotWidth = compact ? 210 : 610;
   const top = 18;
-  const rowHeight = 29;
-  const bottom = 36;
+  const rowHeight = compact ? 39 : 29;
+  const bottom = compact ? 62 : 54;
   const height = top + visible.length * rowHeight + bottom;
   const minValue = Math.min(0, ...visible.map((item) => item.value));
   const maxValue = Math.max(0, ...visible.map((item) => item.value));
@@ -225,23 +241,45 @@ function renderHorizontalChart(container, items, options) {
   const zeroX = scale(0);
   const svg = makeSvg(container, width, height, options.label);
 
-  for (let index = 0; index <= 4; index += 1) {
-    const value = minValue + span * index / 4;
+  const tickCount = compact ? 2 : 4;
+  for (let index = 0; index <= tickCount; index += 1) {
+    const value = minValue + span * index / tickCount;
     const x = scale(value);
     svgNode(svg, "line", {
       x1: x, y1: top - 4, x2: x, y2: height - bottom + 1,
       class: value === 0 ? "axis" : "grid-line"
     });
     svgNode(svg, "text", {
-      x, y: height - 8, "text-anchor": "middle", class: "axis-label"
+      x, y: height - 27, "text-anchor": "middle", class: "axis-label"
     }, options.format(value));
   }
+  svgNode(svg, "text", {
+    x: marginLeft + plotWidth / 2, y: height - 6, "text-anchor": "middle", class: "axis-label"
+  }, options.axisLabel || "Value");
 
   visible.forEach((item, index) => {
     const centerY = top + index * rowHeight + rowHeight / 2;
-    svgNode(svg, "text", {
-      x: marginLeft - 12, y: centerY + 4, "text-anchor": "end", class: "data-label"
-    }, item.label);
+    const isHighlighted = (options.highlight || []).includes(item.label);
+    const label = svgNode(svg, "text", {
+      x: marginLeft - 12, y: centerY + 4, "text-anchor": "end",
+      class: `data-label${isHighlighted ? " highlight-label" : ""}`
+    });
+    const words = compact ? item.label.split(/\s+/) : [item.label];
+    const lines = [];
+    words.forEach((word) => {
+      const current = lines[lines.length - 1];
+      if (compact && current && `${current} ${word}`.length > 18) lines.push(word);
+      else if (current) lines[lines.length - 1] = `${current} ${word}`;
+      else lines.push(word);
+    });
+    const firstLineY = centerY + 4 - (lines.length - 1) * 6;
+    lines.forEach((line, lineIndex) => {
+      const tspan = document.createElementNS(SVG_NS, "tspan");
+      tspan.setAttribute("x", String(marginLeft - 12));
+      tspan.setAttribute("y", String(firstLineY + lineIndex * 12));
+      tspan.textContent = line;
+      label.append(tspan);
+    });
     const valueX = scale(item.value);
     const rect = svgNode(svg, "rect", {
       x: Math.min(zeroX, valueX),
@@ -249,14 +287,15 @@ function renderHorizontalChart(container, items, options) {
       width: Math.max(1, Math.abs(valueX - zeroX)),
       height: 14,
       rx: 2,
-      class: item.value < 0 ? "bar negative" : "bar"
+      class: `${item.value < 0 ? "bar negative" : "bar"}${options.highlight ? (isHighlighted ? " highlight" : " quiet") : ""}`
     });
     addTooltip(rect, `${item.label}: ${options.format(item.value)}${item.count === undefined ? "" : `; ${formatCount(item.count)} sales`}`);
-    const labelX = item.value < 0 ? valueX - 8 : valueX + 8;
+    const nearRightEdge = valueX > width - (compact ? 82 : 170);
+    const labelX = item.value < 0 || nearRightEdge ? valueX - 8 : valueX + 8;
     svgNode(svg, "text", {
       x: labelX, y: centerY + 4,
-      "text-anchor": item.value < 0 ? "end" : "start",
-      class: "data-label"
+      "text-anchor": item.value < 0 || nearRightEdge ? "end" : "start",
+      class: `data-label${isHighlighted ? " highlight-label" : ""}`
     }, options.format(item.value));
   });
 }
@@ -267,10 +306,11 @@ function renderScatter(container, rows) {
     return;
   }
 
-  const width = 1000;
-  const height = 560;
-  const left = 95;
-  const right = 28;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const height = compact ? 420 : 560;
+  const left = compact ? 86 : 95;
+  const right = compact ? 18 : 28;
   const top = 25;
   const bottom = 72;
   const plotWidth = width - left - right;
@@ -285,8 +325,9 @@ function renderScatter(container, rows) {
   const yScale = (value) => top + plotHeight - ((value - yMin) / (yMax - yMin || 1)) * plotHeight;
   const svg = makeSvg(container, width, height, "Scatter plot of city sale-price medians and means using all rows.");
 
-  for (let index = 0; index <= 4; index += 1) {
-    const fraction = index / 4;
+  const tickCount = compact ? 3 : 4;
+  for (let index = 0; index <= tickCount; index += 1) {
+    const fraction = index / tickCount;
     const x = left + fraction * plotWidth;
     const y = top + plotHeight - fraction * plotHeight;
     svgNode(svg, "line", { x1: x, y1: top, x2: x, y2: top + plotHeight, class: "grid-line" });
@@ -320,13 +361,14 @@ function renderSlopeChart(container, rows) {
     return;
   }
 
-  const width = 1000;
-  const top = 52;
-  const rowHeight = 27;
-  const bottom = 20;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const top = compact ? 42 : 52;
+  const rowHeight = compact ? 24 : 27;
+  const bottom = 30;
   const height = top + rows.length * rowHeight + bottom;
-  const leftRankX = 270;
-  const rightRankX = 770;
+  const leftRankX = compact ? 190 : 270;
+  const rightRankX = compact ? 330 : 770;
   const rankY = (rank) => top + (rank - 1) * rowHeight + rowHeight / 2;
   const svg = makeSvg(container, width, height, "Slope chart comparing each city's mean-price rank using all rows and valid-price rows.");
   svgNode(svg, "text", { x: leftRankX, y: 22, "text-anchor": "middle", class: "axis-label" }, "All rows");
@@ -334,13 +376,12 @@ function renderSlopeChart(container, rows) {
 
   rows.forEach((row) => {
     const changed = row.allRank !== row.validRank;
-    const colorClass = changed ? "bar negative" : "bar";
     svgNode(svg, "text", {
       x: 4, y: rankY(row.allRank) + 4, class: "data-label"
-    }, row.city);
+    }, compact ? row.city.split(",")[0] : row.city);
     const line = svgNode(svg, "line", {
       x1: leftRankX, y1: rankY(row.allRank), x2: rightRankX, y2: rankY(row.validRank),
-      class: colorClass, stroke: changed ? "#b24c36" : "#145c70", "stroke-width": 2, opacity: 0.8
+      class: `slope-line${changed ? " changed" : ""}`, "stroke-width": 2, opacity: 0.8
     });
     addTooltip(line, `${row.city}: all rows rank ${row.allRank}; valid-price rank ${row.validRank}`);
     svgNode(svg, "text", {
@@ -350,15 +391,18 @@ function renderSlopeChart(container, rows) {
       x: rightRankX + 12, y: rankY(row.validRank) + 4, class: "data-label"
     }, String(row.validRank));
   });
+  svgNode(svg, "text", { x: width / 2, y: height - 5, "text-anchor": "middle", class: "axis-label" },
+    "Rank (1 = highest mean)");
 }
 
 function renderMonthlyChart(container, counts) {
-  const width = 1000;
-  const height = 360;
-  const left = 62;
-  const right = 25;
-  const top = 24;
-  const bottom = 62;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const height = compact ? 330 : 360;
+  const left = compact ? 40 : 62;
+  const right = compact ? 12 : 25;
+  const top = compact ? 22 : 24;
+  const bottom = compact ? 64 : 66;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   const maxCount = Math.max(1, ...counts.map((item) => item.count));
@@ -384,10 +428,15 @@ function renderMonthlyChart(container, counts) {
       "text-anchor": "middle", class: "data-label"
     }, formatCount(item.count));
     svgNode(svg, "text", {
-      x: x + barWidth / 2, y: height - 27, "text-anchor": "middle", class: "axis-label"
+      x: x + barWidth / 2, y: height - 30, "text-anchor": "middle", class: "axis-label"
     }, item.month.slice(0, 3));
   });
   svgNode(svg, "line", { x1: left, y1: top + plotHeight, x2: left + plotWidth, y2: top + plotHeight, class: "axis" });
+  svgNode(svg, "text", { x: left + plotWidth / 2, y: height - 5, "text-anchor": "middle", class: "axis-label" }, "Month");
+  svgNode(svg, "text", {
+    x: 13, y: top + plotHeight / 2, "text-anchor": "middle", class: "axis-label",
+    transform: `rotate(-90 13 ${top + plotHeight / 2})`
+  }, "Sales");
 }
 
 function renderDistanceChart(container, medianDistance, maxDistance, campus, count) {
@@ -396,10 +445,11 @@ function renderDistanceChart(container, medianDistance, maxDistance, campus, cou
     return;
   }
 
-  const width = 900;
-  const height = 150;
-  const left = 55;
-  const right = 55;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 900;
+  const height = 180;
+  const left = compact ? 36 : 55;
+  const right = compact ? 36 : 55;
   const axisY = 82;
   const axisWidth = width - left - right;
   const domainMax = maxDistance > 0 ? maxDistance : 1;
@@ -419,7 +469,10 @@ function renderDistanceChart(container, medianDistance, maxDistance, campus, cou
   }, `${formatNumber(medianDistance, 1)} miles`);
   svgNode(svg, "text", {
     x: width / 2, y: 18, "text-anchor": "middle", class: "axis-label"
-  }, `${campus}; ${formatCount(count)} qualifying sales`);
+  }, compact ? `${formatCount(count)} qualifying sales` : `${campus}; ${formatCount(count)} qualifying sales`);
+  svgNode(svg, "text", {
+    x: width / 2, y: height - 4, "text-anchor": "middle", class: "axis-label"
+  }, "Distance to campus (miles)");
 }
 
 function createSelectControl(container, id, labelText, values, initialValue) {
@@ -488,10 +541,12 @@ function renderLegacyTable(rows) {
         median(prices),
         mean(prices)
       ];
-      const priceCells = summary.map((value) => {
+      countCell.dataset.label = "Qualifying sales";
+      const priceCells = summary.map((value, index) => {
         const cell = document.createElement("td");
         cell.className = "price";
         cell.textContent = formatCurrency(value);
+        cell.dataset.label = ["Highest sale", "2nd highest", "3rd highest", "Median", "Mean"][index];
         return cell;
       });
       row.append(cityCell, countCell, ...priceCells);
@@ -511,12 +566,14 @@ function renderQ1(rows, cities) {
   });
   const highest = Math.max(...summaries.map((item) => item.median));
   const leaders = summaries.filter((item) => item.median === highest);
-  setAnswer("q1", `${leaders.map((item) => item.city).join(", ")} has the highest median sale price at ${formatCurrency(highest)}${leaders.length > 1 ? " (tie)" : ""}.`);
+  setAnswer("q1", `${leaders.map((item) => item.city).join(", ")} has the highest median sale price at ${formatCurrency(highest)}${leaders.length > 1 ? " (tie)" : ""}.`, leaders.map((item) => item.city));
   renderHorizontalChart(document.querySelector("#q1 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).sort((a, b) => b.value - a.value), {
     label: "Median valid sale price for every city.",
     format: formatCurrency,
+    highlight: leaders.map((item) => item.city),
+    axisLabel: "Median sale price",
     value: "median"
   });
   renderDetail("q1", ["City", "Median sale price", "Sales"], summaries
@@ -631,7 +688,8 @@ function renderQ4(rows, areas) {
     label: item.area, value: item.change
   })).sort((a, b) => (Number.isFinite(b.value) ? b.value : -Infinity) - (Number.isFinite(a.value) ? a.value : -Infinity)), {
     label: "Percent change in median valid sale price by campus area.",
-    format: (value) => `${formatNumber(value, 1)}%`
+    format: (value) => `${formatNumber(value, 1)}%`,
+    axisLabel: "Change in median sale price (%)"
   });
   renderDetail("q4", ["Campus area", "2024 median", "2025 median", "Percent change"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -655,7 +713,8 @@ function renderQ5(rows, areas) {
     label: item.area, value: item.median, count: item.count
   })).sort((a, b) => a.value - b.value), {
     label: "Median days on market by campus area.",
-    format: (value) => `${formatNumber(value, 1)} days`
+    format: (value) => `${formatNumber(value, 1)} days`,
+    axisLabel: "Median days on market (days)"
   });
   renderDetail("q5", ["Campus area", "Median days on market", "Sales with both dates"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -687,7 +746,8 @@ function renderQ6(rows, areas) {
     label: item.area, value: item.burden, count: item.count
   })).sort((a, b) => b.value - a.value), {
     label: "Annual tax burden by campus area.",
-    format: (value) => `${formatNumber(value, 1)}%`
+    format: (value) => `${formatNumber(value, 1)}%`,
+    axisLabel: "Annual tax / sale price (%)"
   });
   renderDetail("q6", ["Campus area", "Total annual tax", "Total sale price", "Tax burden", "Sales"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -702,18 +762,21 @@ function renderQ7(rows, cities, beds) {
     return { city, median: median(prices), count: prices.length };
   });
   const available = summaries.filter((item) => Number.isFinite(item.median));
+  let leaders = [];
   if (!available.length) {
     setAnswer("q7", `No valid-price sales were recorded with exactly ${beds} bedrooms.`);
   } else {
     const lowest = Math.min(...available.map((item) => item.median));
-    const leaders = available.filter((item) => item.median === lowest);
-    setAnswer("q7", `${leaders.map((item) => item.city).join(", ")} has the lowest median at ${formatCurrency(lowest)} for exactly ${beds} bedrooms.`);
+    leaders = available.filter((item) => item.median === lowest);
+    setAnswer("q7", `${leaders.map((item) => item.city).join(", ")} has the lowest median at ${formatCurrency(lowest)} for exactly ${beds} bedrooms.`, leaders.map((item) => item.city));
   }
   renderHorizontalChart(document.querySelector("#q7 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: `Median valid sale price by city for exactly ${beds} bedrooms.`,
-    format: formatCurrency
+    format: formatCurrency,
+    highlight: leaders.map((item) => item.city),
+    axisLabel: "Median sale price"
   });
   renderDetail("q7", ["City", "Median sale price", "Sales"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -737,20 +800,23 @@ function renderQ8(rows, cities, minimum, maximum) {
     return { city, median: median(cityRows.map(daysOnMarket)), count: cityRows.length };
   });
   const available = summaries.filter((item) => Number.isFinite(item.median));
+  let leaders = [];
   if (!isRangeValid) {
     setAnswer("q8", "Enter a minimum price that is less than or equal to the maximum price.");
   } else if (effectiveMinimum > effectiveMaximum || !available.length) {
     setAnswer("q8", `No sales with both dates fall within the selected range and valid-price scope (${formatCurrency(effectiveMinimum)}–${formatCurrency(effectiveMaximum)}).`);
   } else {
     const shortest = Math.min(...available.map((item) => item.median));
-    const leaders = available.filter((item) => item.median === shortest);
-    setAnswer("q8", `${leaders.map((item) => item.city).join(", ")} has the shortest median days on market at ${formatNumber(shortest, 1)} days, using ${formatCount(leaders.reduce((total, item) => total + item.count, 0))} sales${leaders.length > 1 ? " across the tied cities" : ""}.`);
+    leaders = available.filter((item) => item.median === shortest);
+    setAnswer("q8", `${leaders.map((item) => item.city).join(", ")} has the shortest median days on market at ${formatNumber(shortest, 1)} days, using ${formatCount(leaders.reduce((total, item) => total + item.count, 0))} sales${leaders.length > 1 ? " across the tied cities" : ""}.`, leaders.map((item) => item.city));
   }
   renderHorizontalChart(document.querySelector("#q8 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: "Median days on market by city for the selected valid-price range.",
-    format: (value) => `${formatNumber(value, 1)} days`
+    format: (value) => `${formatNumber(value, 1)} days`,
+    highlight: leaders.map((item) => item.city),
+    axisLabel: "Median days on market (days)"
   });
   renderDetail("q8", ["City", "Median days on market", "Sales with both dates"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -806,47 +872,131 @@ function renderQuestions(rows) {
   const areaOptions = areas.map((area) => ({ value: area, label: area }));
   const years = uniqueSorted(rows.map(saleYear).filter(Number.isFinite), (a, b) => a - b);
   const yearOptions = years.map((year) => ({ value: year, label: String(year) }));
+  const search = new URLSearchParams(window.location.search);
+  const savedBeds = bedroomValues.includes(Number(search.get("q7Beds"))) ? Number(search.get("q7Beds")) : 3;
+  const savedCity = cities.includes(search.get("q9City")) ? search.get("q9City") : cities[0];
+  const savedYear = years.includes(Number(search.get("q9Year"))) ? Number(search.get("q9Year")) : years[years.length - 1];
+  const savedCampus = areas.includes(search.get("q10Area")) ? search.get("q10Area") : areas[0];
+  const savedNumber = (key, fallback) => {
+    const raw = search.get(key);
+    if (raw === null || raw.trim() === "") return fallback;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const q8Minimum = savedNumber("q8Min", MINIMUM_SALE_PRICE);
+  const q8Maximum = savedNumber("q8Max", MAXIMUM_SALE_PRICE);
+  const q10MaximumBudget = savedNumber("q10Budget", 400000);
+  const q10MinimumBeds = savedNumber("q10Beds", 3);
 
   const q7Controls = document.querySelector("#q7 .controls");
   const q7Beds = createSelectControl(q7Controls, "q7-beds", "Exactly this many bedrooms", bedroomValues.map((beds) => ({
     value: beds, label: String(beds)
-  })), bedroomValues.includes(3) ? 3 : bedroomValues[0]);
+  })), bedroomValues.includes(savedBeds) ? savedBeds : bedroomValues[0]);
   const q8Controls = document.querySelector("#q8 .controls");
-  const q8Min = createNumberControl(q8Controls, "q8-min-price", "Minimum price ($)", MINIMUM_SALE_PRICE);
-  const q8Max = createNumberControl(q8Controls, "q8-max-price", "Maximum price ($)", MAXIMUM_SALE_PRICE);
+  const q8Min = createNumberControl(q8Controls, "q8-min-price", "Minimum price ($)", q8Minimum);
+  const q8Max = createNumberControl(q8Controls, "q8-max-price", "Maximum price ($)", q8Maximum);
   const q9Controls = document.querySelector("#q9 .controls");
-  const q9City = createSelectControl(q9Controls, "q9-city", "City", cityOptions, cities[0]);
-  const q9Year = createSelectControl(q9Controls, "q9-year", "Year", yearOptions, years[years.length - 1]);
+  const q9City = createSelectControl(q9Controls, "q9-city", "City", cityOptions, savedCity);
+  const q9Year = createSelectControl(q9Controls, "q9-year", "Year", yearOptions, savedYear);
   const q10Controls = document.querySelector("#q10 .controls");
-  const q10Campus = createSelectControl(q10Controls, "q10-campus", "Campus area", areaOptions, areas[0]);
-  const q10Budget = createNumberControl(q10Controls, "q10-budget", "Maximum budget ($)", 400000);
-  const q10Beds = createNumberControl(q10Controls, "q10-min-beds", "Minimum bedrooms", 3, "1");
+  const q10Campus = createSelectControl(q10Controls, "q10-campus", "Campus area", areaOptions, savedCampus);
+  const q10Budget = createNumberControl(q10Controls, "q10-budget", "Maximum budget ($)", q10MaximumBudget);
+  const q10Beds = createNumberControl(q10Controls, "q10-min-beds", "Minimum bedrooms", q10MinimumBeds, "1");
   const maxDistance = Math.max(...rows.map((row) => numberValue(row, "miles_to_campus")).filter(Number.isFinite));
 
-  renderQ1(rows, cities);
-  renderQ2(rows, cities);
-  renderQ3(rows);
-  renderQ4(rows, areas);
-  renderQ5(rows, areas);
-  renderQ6(rows, areas);
   const updateQ7 = () => renderQ7(rows, cities, Number(q7Beds.value));
   const updateQ8 = () => renderQ8(rows, cities, inputNumber(q8Min), inputNumber(q8Max));
   const updateQ9 = () => renderQ9(rows, q9City.value, Number(q9Year.value));
   const updateQ10 = () => renderQ10(rows, q10Campus.value, inputNumber(q10Budget), inputNumber(q10Beds), maxDistance);
-  q7Beds.addEventListener("change", updateQ7);
-  q8Min.addEventListener("input", updateQ8);
-  q8Max.addEventListener("input", updateQ8);
-  q9City.addEventListener("change", updateQ9);
-  q9Year.addEventListener("change", updateQ9);
-  q10Campus.addEventListener("change", updateQ10);
-  q10Budget.addEventListener("input", updateQ10);
-  q10Beds.addEventListener("input", updateQ10);
-  updateQ7();
-  updateQ8();
-  updateQ9();
-  updateQ10();
+  const renderAllQuestions = () => {
+    renderQ1(rows, cities);
+    renderQ2(rows, cities);
+    renderQ3(rows);
+    renderQ4(rows, areas);
+    renderQ5(rows, areas);
+    renderQ6(rows, areas);
+    updateQ7();
+    updateQ8();
+    updateQ9();
+    updateQ10();
+  };
+  const syncQuestionParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("q7Beds", q7Beds.value);
+    params.set("q8Min", q8Min.value);
+    params.set("q8Max", q8Max.value);
+    params.set("q9City", q9City.value);
+    params.set("q9Year", q9Year.value);
+    params.set("q10Area", q10Campus.value);
+    params.set("q10Budget", q10Budget.value);
+    params.set("q10Beds", q10Beds.value);
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  };
+  q7Beds.addEventListener("change", () => { updateQ7(); syncQuestionParams(); });
+  q8Min.addEventListener("input", () => { updateQ8(); syncQuestionParams(); });
+  q8Max.addEventListener("input", () => { updateQ8(); syncQuestionParams(); });
+  q9City.addEventListener("change", () => { updateQ9(); syncQuestionParams(); });
+  q9Year.addEventListener("change", () => { updateQ9(); syncQuestionParams(); });
+  q10Campus.addEventListener("change", () => { updateQ10(); syncQuestionParams(); });
+  q10Budget.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
+  q10Beds.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
+  renderAllQuestions();
+  let compactCharts = window.matchMedia("(max-width: 60rem)").matches;
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      const nextLayout = window.matchMedia("(max-width: 60rem)").matches;
+      if (nextLayout === compactCharts) return;
+      compactCharts = nextLayout;
+      renderAllQuestions();
+    }, 120);
+  });
   document.querySelector("#questions").hidden = false;
 }
+
+function initializePresentationControls() {
+  const root = document.documentElement;
+  const toggle = document.querySelector("#theme-toggle");
+  toggle.addEventListener("click", () => {
+    const dark = root.dataset.theme !== "dark";
+    root.dataset.theme = dark ? "dark" : "light";
+    toggle.setAttribute("aria-pressed", String(dark));
+    toggle.textContent = dark ? "Use light mode" : "Use dark mode";
+  });
+
+  const tooltip = document.querySelector("#chart-tooltip");
+  const placeTooltip = (x, y) => {
+    tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltip.offsetWidth - 8, x + 12))}px`;
+    tooltip.style.top = `${Math.max(8, Math.min(window.innerHeight - tooltip.offsetHeight - 8, y + 12))}px`;
+  };
+  const showTooltip = (target, x, y) => {
+    const element = target.closest("[data-tooltip]");
+    if (!element) return;
+    tooltip.textContent = element.dataset.tooltip;
+    tooltip.hidden = false;
+    placeTooltip(x, y);
+  };
+  document.addEventListener("pointerover", (event) => showTooltip(event.target, event.clientX, event.clientY));
+  document.addEventListener("pointermove", (event) => {
+    if (!tooltip.hidden) placeTooltip(event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerout", (event) => {
+    if (event.target.closest("[data-tooltip]") && !event.relatedTarget?.closest?.("[data-tooltip]")) tooltip.hidden = true;
+  });
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest("[data-tooltip]");
+    if (!target) return;
+    const bounds = target.getBoundingClientRect();
+    showTooltip(target, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (event.target.closest("[data-tooltip]")) tooltip.hidden = true;
+  });
+}
+
+initializePresentationControls();
 
 fetch(DATA_PATH)
   .then((response) => {
@@ -858,6 +1008,7 @@ fetch(DATA_PATH)
     if (!rows.length) throw new Error("The sales data file is empty.");
     renderLegacyTable(rows);
     renderQuestions(rows);
+    document.dispatchEvent(new CustomEvent("sales:loaded", { detail: { rows } }));
   })
   .catch((error) => {
     document.querySelector("#status").textContent = `Unable to load the sales data: ${error.message}`;
