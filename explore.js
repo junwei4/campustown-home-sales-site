@@ -395,11 +395,11 @@
         "aria-disabled": active ? "false" : "true",
         class: "map-location"
       });
+      group.setAttribute("data-tooltip", `${location.city}: ${location.latitude.toFixed(3)}°, ${location.longitude.toFixed(3)}°${active ? "" : "; no sales match current filters"}`);
       const point = makeSvgElement(group, "circle", {
         cx, cy, r: selected ? 8 : 6, class: "map-point"
       });
-      const title = makeSvgElement(point, "title", {}, `${location.city}: ${location.latitude.toFixed(3)}°, ${location.longitude.toFixed(3)}°`);
-      title.textContent = `${location.city}: ${location.latitude.toFixed(3)}°, ${location.longitude.toFixed(3)}°`;
+      point.setAttribute("aria-hidden", "true");
       const labelCount = locationCounts.get(`${Math.round(cx / 60)}-${Math.round(cy / 35)}`) || 0;
       locationCounts.set(`${Math.round(cx / 60)}-${Math.round(cy / 35)}`, labelCount + 1);
       const offsetY = labelCount * 13;

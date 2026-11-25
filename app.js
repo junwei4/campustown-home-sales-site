@@ -127,8 +127,23 @@ function groupBy(rows, keyFunction) {
   return groups;
 }
 
-function setAnswer(questionId, text) {
-  document.querySelector(`#${questionId} .answer`).textContent = text;
+function setAnswer(questionId, text, highlights = []) {
+  const answer = document.querySelector(`#${questionId} .answer`);
+  answer.replaceChildren();
+  const matches = highlights.map((value) => ({ value, index: text.indexOf(value) }))
+    .filter((match) => match.index >= 0)
+    .sort((a, b) => a.index - b.index);
+  let position = 0;
+  matches.forEach((match) => {
+    if (match.index < position) return;
+    answer.append(document.createTextNode(text.slice(position, match.index)));
+    const highlight = document.createElement("strong");
+    highlight.className = "answer-highlight";
+    highlight.textContent = match.value;
+    answer.append(highlight);
+    position = match.index + match.value.length;
+  });
+  answer.append(document.createTextNode(text.slice(position)));
 }
 
 function setExplanation(questionId, text) {
@@ -193,9 +208,8 @@ function svgNode(svg, tag, attributes = {}, text = "") {
 }
 
 function addTooltip(element, text) {
-  const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = text;
-  element.append(title);
+  element.setAttribute("data-tooltip", text);
+  element.setAttribute("aria-label", text);
 }
 
 function renderEmptyChart(container, message) {
@@ -239,8 +253,10 @@ function renderHorizontalChart(container, items, options) {
 
   visible.forEach((item, index) => {
     const centerY = top + index * rowHeight + rowHeight / 2;
+    const isHighlighted = (options.highlight || []).includes(item.label);
     svgNode(svg, "text", {
-      x: marginLeft - 12, y: centerY + 4, "text-anchor": "end", class: "data-label"
+      x: marginLeft - 12, y: centerY + 4, "text-anchor": "end",
+      class: `data-label${isHighlighted ? " highlight-label" : ""}`
     }, item.label);
     const valueX = scale(item.value);
     const rect = svgNode(svg, "rect", {
@@ -249,14 +265,14 @@ function renderHorizontalChart(container, items, options) {
       width: Math.max(1, Math.abs(valueX - zeroX)),
       height: 14,
       rx: 2,
-      class: item.value < 0 ? "bar negative" : "bar"
+      class: `${item.value < 0 ? "bar negative" : "bar"}${options.highlight ? (isHighlighted ? " highlight" : " quiet") : ""}`
     });
     addTooltip(rect, `${item.label}: ${options.format(item.value)}${item.count === undefined ? "" : `; ${formatCount(item.count)} sales`}`);
     const labelX = item.value < 0 ? valueX - 8 : valueX + 8;
     svgNode(svg, "text", {
       x: labelX, y: centerY + 4,
       "text-anchor": item.value < 0 ? "end" : "start",
-      class: "data-label"
+      class: `data-label${isHighlighted ? " highlight-label" : ""}`
     }, options.format(item.value));
   });
 }
@@ -511,12 +527,13 @@ function renderQ1(rows, cities) {
   });
   const highest = Math.max(...summaries.map((item) => item.median));
   const leaders = summaries.filter((item) => item.median === highest);
-  setAnswer("q1", `${leaders.map((item) => item.city).join(", ")} has the highest median sale price at ${formatCurrency(highest)}${leaders.length > 1 ? " (tie)" : ""}.`);
+  setAnswer("q1", `${leaders.map((item) => item.city).join(", ")} has the highest median sale price at ${formatCurrency(highest)}${leaders.length > 1 ? " (tie)" : ""}.`, leaders.map((item) => item.city));
   renderHorizontalChart(document.querySelector("#q1 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).sort((a, b) => b.value - a.value), {
     label: "Median valid sale price for every city.",
     format: formatCurrency,
+    highlight: leaders.map((item) => item.city),
     value: "median"
   });
   renderDetail("q1", ["City", "Median sale price", "Sales"], summaries
@@ -702,18 +719,20 @@ function renderQ7(rows, cities, beds) {
     return { city, median: median(prices), count: prices.length };
   });
   const available = summaries.filter((item) => Number.isFinite(item.median));
+  let leaders = [];
   if (!available.length) {
     setAnswer("q7", `No valid-price sales were recorded with exactly ${beds} bedrooms.`);
   } else {
     const lowest = Math.min(...available.map((item) => item.median));
-    const leaders = available.filter((item) => item.median === lowest);
-    setAnswer("q7", `${leaders.map((item) => item.city).join(", ")} has the lowest median at ${formatCurrency(lowest)} for exactly ${beds} bedrooms.`);
+    leaders = available.filter((item) => item.median === lowest);
+    setAnswer("q7", `${leaders.map((item) => item.city).join(", ")} has the lowest median at ${formatCurrency(lowest)} for exactly ${beds} bedrooms.`, leaders.map((item) => item.city));
   }
   renderHorizontalChart(document.querySelector("#q7 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: `Median valid sale price by city for exactly ${beds} bedrooms.`,
-    format: formatCurrency
+    format: formatCurrency,
+    highlight: leaders.map((item) => item.city)
   });
   renderDetail("q7", ["City", "Median sale price", "Sales"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -737,20 +756,22 @@ function renderQ8(rows, cities, minimum, maximum) {
     return { city, median: median(cityRows.map(daysOnMarket)), count: cityRows.length };
   });
   const available = summaries.filter((item) => Number.isFinite(item.median));
+  let leaders = [];
   if (!isRangeValid) {
     setAnswer("q8", "Enter a minimum price that is less than or equal to the maximum price.");
   } else if (effectiveMinimum > effectiveMaximum || !available.length) {
     setAnswer("q8", `No sales with both dates fall within the selected range and valid-price scope (${formatCurrency(effectiveMinimum)}–${formatCurrency(effectiveMaximum)}).`);
   } else {
     const shortest = Math.min(...available.map((item) => item.median));
-    const leaders = available.filter((item) => item.median === shortest);
-    setAnswer("q8", `${leaders.map((item) => item.city).join(", ")} has the shortest median days on market at ${formatNumber(shortest, 1)} days, using ${formatCount(leaders.reduce((total, item) => total + item.count, 0))} sales${leaders.length > 1 ? " across the tied cities" : ""}.`);
+    leaders = available.filter((item) => item.median === shortest);
+    setAnswer("q8", `${leaders.map((item) => item.city).join(", ")} has the shortest median days on market at ${formatNumber(shortest, 1)} days, using ${formatCount(leaders.reduce((total, item) => total + item.count, 0))} sales${leaders.length > 1 ? " across the tied cities" : ""}.`, leaders.map((item) => item.city));
   }
   renderHorizontalChart(document.querySelector("#q8 .chart"), summaries.map((item) => ({
     label: item.city, value: item.median, count: item.count
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: "Median days on market by city for the selected valid-price range.",
-    format: (value) => `${formatNumber(value, 1)} days`
+    format: (value) => `${formatNumber(value, 1)} days`,
+    highlight: leaders.map((item) => item.city)
   });
   renderDetail("q8", ["City", "Median days on market", "Sales with both dates"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -812,7 +833,9 @@ function renderQuestions(rows) {
   const savedYear = years.includes(Number(search.get("q9Year"))) ? Number(search.get("q9Year")) : years[years.length - 1];
   const savedCampus = areas.includes(search.get("q10Area")) ? search.get("q10Area") : areas[0];
   const savedNumber = (key, fallback) => {
-    const value = Number(search.get(key));
+    const raw = search.get(key);
+    if (raw === null || raw.trim() === "") return fallback;
+    const value = Number(raw);
     return Number.isFinite(value) ? value : fallback;
   };
   const q8Minimum = savedNumber("q8Min", MINIMUM_SALE_PRICE);
@@ -873,6 +896,48 @@ function renderQuestions(rows) {
   updateQ10();
   document.querySelector("#questions").hidden = false;
 }
+
+function initializePresentationControls() {
+  const root = document.documentElement;
+  const toggle = document.querySelector("#theme-toggle");
+  toggle.addEventListener("click", () => {
+    const dark = root.dataset.theme !== "dark";
+    root.dataset.theme = dark ? "dark" : "light";
+    toggle.setAttribute("aria-pressed", String(dark));
+    toggle.textContent = dark ? "Use light mode" : "Use dark mode";
+  });
+
+  const tooltip = document.querySelector("#chart-tooltip");
+  const placeTooltip = (x, y) => {
+    tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltip.offsetWidth - 8, x + 12))}px`;
+    tooltip.style.top = `${Math.max(8, Math.min(window.innerHeight - tooltip.offsetHeight - 8, y + 12))}px`;
+  };
+  const showTooltip = (target, x, y) => {
+    const element = target.closest("[data-tooltip]");
+    if (!element) return;
+    tooltip.textContent = element.dataset.tooltip;
+    tooltip.hidden = false;
+    placeTooltip(x, y);
+  };
+  document.addEventListener("pointerover", (event) => showTooltip(event.target, event.clientX, event.clientY));
+  document.addEventListener("pointermove", (event) => {
+    if (!tooltip.hidden) placeTooltip(event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerout", (event) => {
+    if (event.target.closest("[data-tooltip]") && !event.relatedTarget?.closest?.("[data-tooltip]")) tooltip.hidden = true;
+  });
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest("[data-tooltip]");
+    if (!target) return;
+    const bounds = target.getBoundingClientRect();
+    showTooltip(target, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (event.target.closest("[data-tooltip]")) tooltip.hidden = true;
+  });
+}
+
+initializePresentationControls();
 
 fetch(DATA_PATH)
   .then((response) => {
