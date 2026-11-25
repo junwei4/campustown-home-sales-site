@@ -182,6 +182,78 @@
     .detail td { white-space: nowrap; }
     .detail td:first-child { white-space: normal; }
 
+    .explore {
+      display: grid;
+      gap: 1.25rem;
+      margin: 2rem 0 3rem;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 1.25rem;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 0.6rem;
+      box-shadow: 0 0.4rem 1.5rem rgb(29 39 51 / 7%);
+    }
+
+    .panel h2, .panel h3 { margin-top: 0; }
+    .filter-grid, .compare-controls, .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+      gap: 1rem;
+    }
+
+    .range-control {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      align-items: end;
+      margin-top: 1rem;
+    }
+
+    .range-control h3 { grid-column: 1 / -1; margin: 0; }
+    .range-control input[type="range"] { grid-column: 1 / -1; width: 100%; }
+    .range-control .control { min-width: 0; }
+    .stat-card, .compare-card {
+      padding: 1rem;
+      background: var(--accent-light);
+      border-radius: 0.5rem;
+    }
+
+    .stat-card strong { display: block; font-size: 1.4rem; }
+    .stat-card span, .compare-card dt { color: var(--muted); font-size: 0.85rem; }
+    .map-frame { overflow: hidden; }
+    .map-frame svg { display: block; width: 100%; height: auto; }
+    .map-point { fill: var(--accent); stroke: white; stroke-width: 2; cursor: pointer; }
+    .map-point:hover, .map-point:focus, .map-point[aria-pressed="true"] { fill: #b24c36; outline: none; }
+    .map-label { fill: var(--ink); font-size: 12px; pointer-events: none; }
+    .map-grid { stroke: var(--line); stroke-width: 1; }
+    .map-axis-label { fill: var(--muted); font-size: 11px; }
+
+    .explore-results { table-layout: auto; }
+    .explore-results th { text-align: left; }
+    .explore-results th:last-child, .explore-results td:last-child { text-align: right; }
+    .sort-button {
+      display: inline-flex;
+      gap: 0.4rem;
+      align-items: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      cursor: pointer;
+    }
+
+    .sort-icon { width: 0.8rem; height: 0.8rem; }
+    .sort-icon path { fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .compare-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .compare-card dl { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 0; }
+    .compare-card dd { margin: 0; font-weight: 700; }
+
     @media (max-width: 42rem) {
       .question-list { gap: 1rem; }
       .question { padding: 1rem; }
@@ -191,13 +263,55 @@
 <body>
   <main>
     <header>
-      <h1>Home sale prices by city</h1>
+      <h1>College-town home sales</h1>
       <p class="intro">The highest three sale prices, median, and mean for each college town.</p>
       <p class="method"><strong>Rule:</strong> sales under $10,000 are left out before calculating these summaries.</p>
       <p class="intro">Below, ten questions use the full dataset or the question-specific filters described in each section. Q1–Q6 do not change with the interactive controls in Q7–Q10.</p>
     </header>
 
     <p id="status" role="status">Loading sales data…</p>
+
+    <section id="explore" class="explore" hidden aria-labelledby="explore-title">
+      <div class="panel">
+        <h2 id="explore-title">Explore the sales</h2>
+        <p>Filter the explore view by place, year, bedrooms, price, living area, and reported features. The question answers below follow their own stated rules.</p>
+        <div id="explore-controls" class="filter-grid"></div>
+        <div id="living-range" class="range-control"></div>
+        <p id="explore-empty" role="status" hidden>No sales match these filters. Try widening a range or choosing “Any”.</p>
+      </div>
+
+      <div id="explore-summary" class="stat-grid" aria-live="polite"></div>
+
+      <div class="panel">
+        <h3>Sales by city on the map</h3>
+        <p>Select a city point to filter the explore view. Coordinates are each city's median recorded sale latitude and longitude.</p>
+        <figure class="map-frame">
+          <div id="location-map" role="group" aria-label="Interactive city location map"></div>
+          <figcaption>Map positions are derived from the median latitude and longitude in the sales records.</figcaption>
+        </figure>
+      </div>
+
+      <div class="panel">
+        <h3>City comparison</h3>
+        <p>Choose any two cities or campus areas. The shared non-location filters apply to both sides.</p>
+        <div id="compare-controls" class="compare-controls"></div>
+        <div id="comparison" class="compare-grid" aria-live="polite"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Filtered city results</h3>
+        <p>Choose a column heading to sort. Median prices use the valid-price scope.</p>
+        <div class="table-wrap">
+          <table id="explore-results" class="explore-results">
+            <caption>City-level sale counts and price medians for the current explore filters.</caption>
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <h2>Original city summary</h2>
     <div class="table-wrap">
       <table hidden id="results">
         <caption>All figures are calculated from qualifying sales in the dataset.</caption>
@@ -339,5 +453,6 @@
   </main>
 
   <script src="app.js" defer></script>
+  <script src="explore.js" defer></script>
 </body>
 </html>

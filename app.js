@@ -806,21 +806,34 @@ function renderQuestions(rows) {
   const areaOptions = areas.map((area) => ({ value: area, label: area }));
   const years = uniqueSorted(rows.map(saleYear).filter(Number.isFinite), (a, b) => a - b);
   const yearOptions = years.map((year) => ({ value: year, label: String(year) }));
+  const search = new URLSearchParams(window.location.search);
+  const savedBeds = bedroomValues.includes(Number(search.get("q7Beds"))) ? Number(search.get("q7Beds")) : 3;
+  const savedCity = cities.includes(search.get("q9City")) ? search.get("q9City") : cities[0];
+  const savedYear = years.includes(Number(search.get("q9Year"))) ? Number(search.get("q9Year")) : years[years.length - 1];
+  const savedCampus = areas.includes(search.get("q10Area")) ? search.get("q10Area") : areas[0];
+  const savedNumber = (key, fallback) => {
+    const value = Number(search.get(key));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const q8Minimum = savedNumber("q8Min", MINIMUM_SALE_PRICE);
+  const q8Maximum = savedNumber("q8Max", MAXIMUM_SALE_PRICE);
+  const q10MaximumBudget = savedNumber("q10Budget", 400000);
+  const q10MinimumBeds = savedNumber("q10Beds", 3);
 
   const q7Controls = document.querySelector("#q7 .controls");
   const q7Beds = createSelectControl(q7Controls, "q7-beds", "Exactly this many bedrooms", bedroomValues.map((beds) => ({
     value: beds, label: String(beds)
-  })), bedroomValues.includes(3) ? 3 : bedroomValues[0]);
+  })), bedroomValues.includes(savedBeds) ? savedBeds : bedroomValues[0]);
   const q8Controls = document.querySelector("#q8 .controls");
-  const q8Min = createNumberControl(q8Controls, "q8-min-price", "Minimum price ($)", MINIMUM_SALE_PRICE);
-  const q8Max = createNumberControl(q8Controls, "q8-max-price", "Maximum price ($)", MAXIMUM_SALE_PRICE);
+  const q8Min = createNumberControl(q8Controls, "q8-min-price", "Minimum price ($)", q8Minimum);
+  const q8Max = createNumberControl(q8Controls, "q8-max-price", "Maximum price ($)", q8Maximum);
   const q9Controls = document.querySelector("#q9 .controls");
-  const q9City = createSelectControl(q9Controls, "q9-city", "City", cityOptions, cities[0]);
-  const q9Year = createSelectControl(q9Controls, "q9-year", "Year", yearOptions, years[years.length - 1]);
+  const q9City = createSelectControl(q9Controls, "q9-city", "City", cityOptions, savedCity);
+  const q9Year = createSelectControl(q9Controls, "q9-year", "Year", yearOptions, savedYear);
   const q10Controls = document.querySelector("#q10 .controls");
-  const q10Campus = createSelectControl(q10Controls, "q10-campus", "Campus area", areaOptions, areas[0]);
-  const q10Budget = createNumberControl(q10Controls, "q10-budget", "Maximum budget ($)", 400000);
-  const q10Beds = createNumberControl(q10Controls, "q10-min-beds", "Minimum bedrooms", 3, "1");
+  const q10Campus = createSelectControl(q10Controls, "q10-campus", "Campus area", areaOptions, savedCampus);
+  const q10Budget = createNumberControl(q10Controls, "q10-budget", "Maximum budget ($)", q10MaximumBudget);
+  const q10Beds = createNumberControl(q10Controls, "q10-min-beds", "Minimum bedrooms", q10MinimumBeds, "1");
   const maxDistance = Math.max(...rows.map((row) => numberValue(row, "miles_to_campus")).filter(Number.isFinite));
 
   renderQ1(rows, cities);
@@ -833,14 +846,27 @@ function renderQuestions(rows) {
   const updateQ8 = () => renderQ8(rows, cities, inputNumber(q8Min), inputNumber(q8Max));
   const updateQ9 = () => renderQ9(rows, q9City.value, Number(q9Year.value));
   const updateQ10 = () => renderQ10(rows, q10Campus.value, inputNumber(q10Budget), inputNumber(q10Beds), maxDistance);
-  q7Beds.addEventListener("change", updateQ7);
-  q8Min.addEventListener("input", updateQ8);
-  q8Max.addEventListener("input", updateQ8);
-  q9City.addEventListener("change", updateQ9);
-  q9Year.addEventListener("change", updateQ9);
-  q10Campus.addEventListener("change", updateQ10);
-  q10Budget.addEventListener("input", updateQ10);
-  q10Beds.addEventListener("input", updateQ10);
+  const syncQuestionParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("q7Beds", q7Beds.value);
+    params.set("q8Min", q8Min.value);
+    params.set("q8Max", q8Max.value);
+    params.set("q9City", q9City.value);
+    params.set("q9Year", q9Year.value);
+    params.set("q10Area", q10Campus.value);
+    params.set("q10Budget", q10Budget.value);
+    params.set("q10Beds", q10Beds.value);
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  };
+  q7Beds.addEventListener("change", () => { updateQ7(); syncQuestionParams(); });
+  q8Min.addEventListener("input", () => { updateQ8(); syncQuestionParams(); });
+  q8Max.addEventListener("input", () => { updateQ8(); syncQuestionParams(); });
+  q9City.addEventListener("change", () => { updateQ9(); syncQuestionParams(); });
+  q9Year.addEventListener("change", () => { updateQ9(); syncQuestionParams(); });
+  q10Campus.addEventListener("change", () => { updateQ10(); syncQuestionParams(); });
+  q10Budget.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
+  q10Beds.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
   updateQ7();
   updateQ8();
   updateQ9();
@@ -858,6 +884,7 @@ fetch(DATA_PATH)
     if (!rows.length) throw new Error("The sales data file is empty.");
     renderLegacyTable(rows);
     renderQuestions(rows);
+    document.dispatchEvent(new CustomEvent("sales:loaded", { detail: { rows } }));
   })
   .catch((error) => {
     document.querySelector("#status").textContent = `Unable to load the sales data: ${error.message}`;
