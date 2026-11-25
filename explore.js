@@ -23,6 +23,7 @@
   let sort = { key: "median", direction: "desc" };
   let state;
   let controls = {};
+  let compactLayout = false;
 
   function number(row, field) {
     if (row[field] === undefined || row[field].trim() === "") return NaN;
@@ -222,8 +223,8 @@
   function createComparisonControls() {
     const parent = document.querySelector("#compare-controls");
     const options = [
-      ...cities.map((city) => ({ value: `city|${city}`, label: city })),
-      ...areas.map((area) => ({ value: `area|${area}`, label: area }))
+      ...cities.map((city) => ({ value: `city|${city}`, label: `City: ${city}` })),
+      ...areas.map((area) => ({ value: `area|${area}`, label: `Campus: ${area}` }))
     ];
     const savedFirst = queryStringValue("compareA", options[0]?.value);
     const savedSecond = queryStringValue("compareB", options[1]?.value ?? options[0]?.value);
@@ -344,9 +345,12 @@
     const target = document.querySelector("#location-map");
     target.replaceChildren();
     const currentCities = new Set(rows.map(cityName));
-    const width = 900;
-    const height = 480;
-    const padding = { top: 24, right: 24, bottom: 52, left: 62 };
+    const compact = window.matchMedia("(max-width: 60rem)").matches;
+    const width = compact ? 480 : 900;
+    const height = compact ? 390 : 480;
+    const padding = compact
+      ? { top: 16, right: 14, bottom: 48, left: 42 }
+      : { top: 24, right: 24, bottom: 52, left: 62 };
     const plotWidth = width - padding.left - padding.right;
     const plotHeight = height - padding.top - padding.bottom;
     const longitudes = cityLocations.map((item) => item.longitude);
@@ -362,6 +366,7 @@
       role: "group",
       "aria-label": "Interactive map of city locations, positioned using median sale latitude and longitude."
     });
+    if (compact) svg.classList.add("compact-map");
 
     for (let tick = 0; tick <= 4; tick += 1) {
       const fraction = tick / 4;
@@ -397,7 +402,7 @@
       });
       group.setAttribute("data-tooltip", `${location.city}: ${location.latitude.toFixed(3)}°, ${location.longitude.toFixed(3)}°${active ? "" : "; no sales match current filters"}`);
       const point = makeSvgElement(group, "circle", {
-        cx, cy, r: selected ? 8 : 6, class: "map-point"
+        cx, cy, r: compact ? (selected ? 10 : 8) : (selected ? 8 : 6), class: "map-point"
       });
       point.setAttribute("aria-hidden", "true");
       const labelCount = locationCounts.get(`${Math.round(cx / 60)}-${Math.round(cy / 35)}`) || 0;
@@ -442,7 +447,7 @@
       const card = document.createElement("article");
       card.className = "compare-card";
       const title = document.createElement("h4");
-      title.textContent = name || `Location ${index + 1}`;
+      title.textContent = `${type === "area" ? "Campus" : "City"}: ${name || `Location ${index + 1}`}`;
       const list = document.createElement("dl");
       [["Median sale price", prices.length ? currencyFormat.format(median(prices)) : "No matching sales"],
         ["Sales", numberFormat.format(subset.length)]].forEach(([label, value]) => {
@@ -454,6 +459,70 @@
       });
       card.append(title, list);
       target.append(card);
+    });
+  }
+
+  function renderPriceChart(grouped) {
+    const target = document.querySelector("#explore-price-chart");
+    target.replaceChildren();
+    if (!grouped.length) {
+      const message = document.createElement("p");
+      message.textContent = "No city medians to chart for these filters.";
+      target.append(message);
+      return;
+    }
+
+    const compact = window.matchMedia("(max-width: 60rem)").matches;
+    const width = compact ? 420 : 760;
+    const left = compact ? 145 : 190;
+    const right = compact ? 56 : 104;
+    const plotWidth = width - left - right;
+    const top = 18;
+    const rowHeight = compact ? 38 : 32;
+    const bottom = compact ? 60 : 54;
+    const height = top + grouped.length * rowHeight + bottom;
+    const maximum = Math.max(...grouped.map((item) => item.median));
+    const x = (value) => left + value / maximum * plotWidth;
+    const svg = makeSvgElement(target, "svg", {
+      viewBox: `0 0 ${width} ${height}`,
+      role: "img",
+      "aria-label": "Median valid sale price by city for the current explore filters."
+    });
+    if (compact) svg.classList.add("compact-chart");
+    const ticks = compact ? 2 : 4;
+    for (let index = 0; index <= ticks; index += 1) {
+      const value = maximum * index / ticks;
+      const tickX = x(value);
+      makeSvgElement(svg, "line", {
+        x1: tickX, y1: top, x2: tickX, y2: height - bottom, class: "grid-line"
+      });
+      makeSvgElement(svg, "text", {
+        x: tickX, y: height - 26, "text-anchor": "middle", class: "axis-label"
+      }, currencyFormat.format(value));
+    }
+    makeSvgElement(svg, "text", {
+      x: left + plotWidth / 2, y: height - 5, "text-anchor": "middle", class: "axis-label"
+    }, "Median sale price");
+    const winner = Math.max(...grouped.map((item) => item.median));
+    grouped.forEach((item, index) => {
+      const centerY = top + index * rowHeight + rowHeight / 2;
+      makeSvgElement(svg, "text", {
+        x: left - 8, y: centerY + 4, "text-anchor": "end",
+        class: state.city === item.city ? "data-label highlight-label" : "data-label"
+      }, compact ? item.city.split(",")[0] : item.city);
+      const bar = makeSvgElement(svg, "rect", {
+        x: left, y: centerY - 7, width: Math.max(1, x(item.median) - left), height: 14, rx: 2,
+        class: item.city === state.city || (!state.city || state.city === "any") && item.median === winner
+          ? "bar highlight" : "bar quiet"
+      });
+      const tooltip = `${item.city}: median ${currencyFormat.format(item.median)}; ${numberFormat.format(item.count)} sales`;
+      bar.setAttribute("data-tooltip", tooltip);
+      bar.setAttribute("aria-label", tooltip);
+      const atRight = x(item.median) > width - right - 70;
+      makeSvgElement(svg, "text", {
+        x: atRight ? x(item.median) - 7 : x(item.median) + 7,
+        y: centerY + 4, "text-anchor": atRight ? "end" : "start", class: "data-label"
+      }, currencyFormat.format(item.median));
     });
   }
 
@@ -527,6 +596,7 @@
         .forEach((value, index) => {
           const cell = document.createElement(index ? "td" : "th");
           if (!index) cell.scope = "row";
+          else cell.dataset.label = ["", "Sales", "Median sale price", "Mean sale price"][index];
           cell.textContent = value;
           if (index === 2) cell.className = "price";
           row.append(cell);
@@ -544,6 +614,7 @@
     renderSummary(rows, grouped);
     renderMap(mapRows);
     renderComparison();
+    renderPriceChart(grouped.slice().sort((a, b) => b.median - a.median));
     renderTable(grouped);
   }
 
@@ -565,6 +636,17 @@
     createControls();
     refresh();
     document.querySelector("#explore").hidden = false;
+    compactLayout = window.matchMedia("(max-width: 60rem)").matches;
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        const nextLayout = window.matchMedia("(max-width: 60rem)").matches;
+        if (nextLayout === compactLayout) return;
+        compactLayout = nextLayout;
+        refresh();
+      }, 120);
+    });
   }
 
   document.addEventListener("sales:loaded", (event) => initialize(event.detail.rows), { once: true });

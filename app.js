@@ -178,6 +178,7 @@ function renderDetail(questionId, headers, rows, emptyMessage = "No sales meet t
     values.forEach((value, index) => {
       const cell = index === 0 ? document.createElement("th") : document.createElement("td");
       if (index === 0) cell.scope = "row";
+      else cell.dataset.label = headers[index];
       cell.textContent = value;
       row.append(cell);
     });
@@ -195,6 +196,7 @@ function makeSvg(container, width, height, label) {
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", label);
   svg.setAttribute("focusable", "true");
+  if (window.matchMedia("(max-width: 60rem)").matches) svg.classList.add("compact-chart");
   container.append(svg);
   return svg;
 }
@@ -224,13 +226,13 @@ function renderHorizontalChart(container, items, options) {
     return;
   }
 
-  const width = 1200;
-  const marginLeft = 430;
-  const plotWidth = 610;
-  const marginRight = 160;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 420 : 1200;
+  const marginLeft = compact ? 150 : 430;
+  const plotWidth = compact ? 210 : 610;
   const top = 18;
-  const rowHeight = 29;
-  const bottom = 36;
+  const rowHeight = compact ? 39 : 29;
+  const bottom = compact ? 62 : 54;
   const height = top + visible.length * rowHeight + bottom;
   const minValue = Math.min(0, ...visible.map((item) => item.value));
   const maxValue = Math.max(0, ...visible.map((item) => item.value));
@@ -239,25 +241,45 @@ function renderHorizontalChart(container, items, options) {
   const zeroX = scale(0);
   const svg = makeSvg(container, width, height, options.label);
 
-  for (let index = 0; index <= 4; index += 1) {
-    const value = minValue + span * index / 4;
+  const tickCount = compact ? 2 : 4;
+  for (let index = 0; index <= tickCount; index += 1) {
+    const value = minValue + span * index / tickCount;
     const x = scale(value);
     svgNode(svg, "line", {
       x1: x, y1: top - 4, x2: x, y2: height - bottom + 1,
       class: value === 0 ? "axis" : "grid-line"
     });
     svgNode(svg, "text", {
-      x, y: height - 8, "text-anchor": "middle", class: "axis-label"
+      x, y: height - 27, "text-anchor": "middle", class: "axis-label"
     }, options.format(value));
   }
+  svgNode(svg, "text", {
+    x: marginLeft + plotWidth / 2, y: height - 6, "text-anchor": "middle", class: "axis-label"
+  }, options.axisLabel || "Value");
 
   visible.forEach((item, index) => {
     const centerY = top + index * rowHeight + rowHeight / 2;
     const isHighlighted = (options.highlight || []).includes(item.label);
-    svgNode(svg, "text", {
+    const label = svgNode(svg, "text", {
       x: marginLeft - 12, y: centerY + 4, "text-anchor": "end",
       class: `data-label${isHighlighted ? " highlight-label" : ""}`
-    }, item.label);
+    });
+    const words = compact ? item.label.split(/\s+/) : [item.label];
+    const lines = [];
+    words.forEach((word) => {
+      const current = lines[lines.length - 1];
+      if (compact && current && `${current} ${word}`.length > 18) lines.push(word);
+      else if (current) lines[lines.length - 1] = `${current} ${word}`;
+      else lines.push(word);
+    });
+    const firstLineY = centerY + 4 - (lines.length - 1) * 6;
+    lines.forEach((line, lineIndex) => {
+      const tspan = document.createElementNS(SVG_NS, "tspan");
+      tspan.setAttribute("x", String(marginLeft - 12));
+      tspan.setAttribute("y", String(firstLineY + lineIndex * 12));
+      tspan.textContent = line;
+      label.append(tspan);
+    });
     const valueX = scale(item.value);
     const rect = svgNode(svg, "rect", {
       x: Math.min(zeroX, valueX),
@@ -268,10 +290,11 @@ function renderHorizontalChart(container, items, options) {
       class: `${item.value < 0 ? "bar negative" : "bar"}${options.highlight ? (isHighlighted ? " highlight" : " quiet") : ""}`
     });
     addTooltip(rect, `${item.label}: ${options.format(item.value)}${item.count === undefined ? "" : `; ${formatCount(item.count)} sales`}`);
-    const labelX = item.value < 0 ? valueX - 8 : valueX + 8;
+    const nearRightEdge = valueX > width - (compact ? 82 : 170);
+    const labelX = item.value < 0 || nearRightEdge ? valueX - 8 : valueX + 8;
     svgNode(svg, "text", {
       x: labelX, y: centerY + 4,
-      "text-anchor": item.value < 0 ? "end" : "start",
+      "text-anchor": item.value < 0 || nearRightEdge ? "end" : "start",
       class: `data-label${isHighlighted ? " highlight-label" : ""}`
     }, options.format(item.value));
   });
@@ -283,10 +306,11 @@ function renderScatter(container, rows) {
     return;
   }
 
-  const width = 1000;
-  const height = 560;
-  const left = 95;
-  const right = 28;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const height = compact ? 420 : 560;
+  const left = compact ? 86 : 95;
+  const right = compact ? 18 : 28;
   const top = 25;
   const bottom = 72;
   const plotWidth = width - left - right;
@@ -301,8 +325,9 @@ function renderScatter(container, rows) {
   const yScale = (value) => top + plotHeight - ((value - yMin) / (yMax - yMin || 1)) * plotHeight;
   const svg = makeSvg(container, width, height, "Scatter plot of city sale-price medians and means using all rows.");
 
-  for (let index = 0; index <= 4; index += 1) {
-    const fraction = index / 4;
+  const tickCount = compact ? 3 : 4;
+  for (let index = 0; index <= tickCount; index += 1) {
+    const fraction = index / tickCount;
     const x = left + fraction * plotWidth;
     const y = top + plotHeight - fraction * plotHeight;
     svgNode(svg, "line", { x1: x, y1: top, x2: x, y2: top + plotHeight, class: "grid-line" });
@@ -336,13 +361,14 @@ function renderSlopeChart(container, rows) {
     return;
   }
 
-  const width = 1000;
-  const top = 52;
-  const rowHeight = 27;
-  const bottom = 20;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const top = compact ? 42 : 52;
+  const rowHeight = compact ? 24 : 27;
+  const bottom = 30;
   const height = top + rows.length * rowHeight + bottom;
-  const leftRankX = 270;
-  const rightRankX = 770;
+  const leftRankX = compact ? 190 : 270;
+  const rightRankX = compact ? 330 : 770;
   const rankY = (rank) => top + (rank - 1) * rowHeight + rowHeight / 2;
   const svg = makeSvg(container, width, height, "Slope chart comparing each city's mean-price rank using all rows and valid-price rows.");
   svgNode(svg, "text", { x: leftRankX, y: 22, "text-anchor": "middle", class: "axis-label" }, "All rows");
@@ -350,13 +376,12 @@ function renderSlopeChart(container, rows) {
 
   rows.forEach((row) => {
     const changed = row.allRank !== row.validRank;
-    const colorClass = changed ? "bar negative" : "bar";
     svgNode(svg, "text", {
       x: 4, y: rankY(row.allRank) + 4, class: "data-label"
-    }, row.city);
+    }, compact ? row.city.split(",")[0] : row.city);
     const line = svgNode(svg, "line", {
       x1: leftRankX, y1: rankY(row.allRank), x2: rightRankX, y2: rankY(row.validRank),
-      class: colorClass, stroke: changed ? "#b24c36" : "#145c70", "stroke-width": 2, opacity: 0.8
+      class: `slope-line${changed ? " changed" : ""}`, "stroke-width": 2, opacity: 0.8
     });
     addTooltip(line, `${row.city}: all rows rank ${row.allRank}; valid-price rank ${row.validRank}`);
     svgNode(svg, "text", {
@@ -366,15 +391,18 @@ function renderSlopeChart(container, rows) {
       x: rightRankX + 12, y: rankY(row.validRank) + 4, class: "data-label"
     }, String(row.validRank));
   });
+  svgNode(svg, "text", { x: width / 2, y: height - 5, "text-anchor": "middle", class: "axis-label" },
+    "Rank (1 = highest mean)");
 }
 
 function renderMonthlyChart(container, counts) {
-  const width = 1000;
-  const height = 360;
-  const left = 62;
-  const right = 25;
-  const top = 24;
-  const bottom = 62;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 1000;
+  const height = compact ? 330 : 360;
+  const left = compact ? 40 : 62;
+  const right = compact ? 12 : 25;
+  const top = compact ? 22 : 24;
+  const bottom = compact ? 64 : 66;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   const maxCount = Math.max(1, ...counts.map((item) => item.count));
@@ -400,10 +428,15 @@ function renderMonthlyChart(container, counts) {
       "text-anchor": "middle", class: "data-label"
     }, formatCount(item.count));
     svgNode(svg, "text", {
-      x: x + barWidth / 2, y: height - 27, "text-anchor": "middle", class: "axis-label"
+      x: x + barWidth / 2, y: height - 30, "text-anchor": "middle", class: "axis-label"
     }, item.month.slice(0, 3));
   });
   svgNode(svg, "line", { x1: left, y1: top + plotHeight, x2: left + plotWidth, y2: top + plotHeight, class: "axis" });
+  svgNode(svg, "text", { x: left + plotWidth / 2, y: height - 5, "text-anchor": "middle", class: "axis-label" }, "Month");
+  svgNode(svg, "text", {
+    x: 13, y: top + plotHeight / 2, "text-anchor": "middle", class: "axis-label",
+    transform: `rotate(-90 13 ${top + plotHeight / 2})`
+  }, "Sales");
 }
 
 function renderDistanceChart(container, medianDistance, maxDistance, campus, count) {
@@ -412,10 +445,11 @@ function renderDistanceChart(container, medianDistance, maxDistance, campus, cou
     return;
   }
 
-  const width = 900;
-  const height = 150;
-  const left = 55;
-  const right = 55;
+  const compact = window.matchMedia("(max-width: 60rem)").matches;
+  const width = compact ? 480 : 900;
+  const height = 180;
+  const left = compact ? 36 : 55;
+  const right = compact ? 36 : 55;
   const axisY = 82;
   const axisWidth = width - left - right;
   const domainMax = maxDistance > 0 ? maxDistance : 1;
@@ -435,7 +469,10 @@ function renderDistanceChart(container, medianDistance, maxDistance, campus, cou
   }, `${formatNumber(medianDistance, 1)} miles`);
   svgNode(svg, "text", {
     x: width / 2, y: 18, "text-anchor": "middle", class: "axis-label"
-  }, `${campus}; ${formatCount(count)} qualifying sales`);
+  }, compact ? `${formatCount(count)} qualifying sales` : `${campus}; ${formatCount(count)} qualifying sales`);
+  svgNode(svg, "text", {
+    x: width / 2, y: height - 4, "text-anchor": "middle", class: "axis-label"
+  }, "Distance to campus (miles)");
 }
 
 function createSelectControl(container, id, labelText, values, initialValue) {
@@ -504,10 +541,12 @@ function renderLegacyTable(rows) {
         median(prices),
         mean(prices)
       ];
-      const priceCells = summary.map((value) => {
+      countCell.dataset.label = "Qualifying sales";
+      const priceCells = summary.map((value, index) => {
         const cell = document.createElement("td");
         cell.className = "price";
         cell.textContent = formatCurrency(value);
+        cell.dataset.label = ["Highest sale", "2nd highest", "3rd highest", "Median", "Mean"][index];
         return cell;
       });
       row.append(cityCell, countCell, ...priceCells);
@@ -534,6 +573,7 @@ function renderQ1(rows, cities) {
     label: "Median valid sale price for every city.",
     format: formatCurrency,
     highlight: leaders.map((item) => item.city),
+    axisLabel: "Median sale price",
     value: "median"
   });
   renderDetail("q1", ["City", "Median sale price", "Sales"], summaries
@@ -648,7 +688,8 @@ function renderQ4(rows, areas) {
     label: item.area, value: item.change
   })).sort((a, b) => (Number.isFinite(b.value) ? b.value : -Infinity) - (Number.isFinite(a.value) ? a.value : -Infinity)), {
     label: "Percent change in median valid sale price by campus area.",
-    format: (value) => `${formatNumber(value, 1)}%`
+    format: (value) => `${formatNumber(value, 1)}%`,
+    axisLabel: "Change in median sale price (%)"
   });
   renderDetail("q4", ["Campus area", "2024 median", "2025 median", "Percent change"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -672,7 +713,8 @@ function renderQ5(rows, areas) {
     label: item.area, value: item.median, count: item.count
   })).sort((a, b) => a.value - b.value), {
     label: "Median days on market by campus area.",
-    format: (value) => `${formatNumber(value, 1)} days`
+    format: (value) => `${formatNumber(value, 1)} days`,
+    axisLabel: "Median days on market (days)"
   });
   renderDetail("q5", ["Campus area", "Median days on market", "Sales with both dates"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -704,7 +746,8 @@ function renderQ6(rows, areas) {
     label: item.area, value: item.burden, count: item.count
   })).sort((a, b) => b.value - a.value), {
     label: "Annual tax burden by campus area.",
-    format: (value) => `${formatNumber(value, 1)}%`
+    format: (value) => `${formatNumber(value, 1)}%`,
+    axisLabel: "Annual tax / sale price (%)"
   });
   renderDetail("q6", ["Campus area", "Total annual tax", "Total sale price", "Tax burden", "Sales"], summaries
     .slice().sort((a, b) => a.area.localeCompare(b.area))
@@ -732,7 +775,8 @@ function renderQ7(rows, cities, beds) {
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: `Median valid sale price by city for exactly ${beds} bedrooms.`,
     format: formatCurrency,
-    highlight: leaders.map((item) => item.city)
+    highlight: leaders.map((item) => item.city),
+    axisLabel: "Median sale price"
   });
   renderDetail("q7", ["City", "Median sale price", "Sales"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -771,7 +815,8 @@ function renderQ8(rows, cities, minimum, maximum) {
   })).filter((item) => Number.isFinite(item.value)).sort((a, b) => a.value - b.value), {
     label: "Median days on market by city for the selected valid-price range.",
     format: (value) => `${formatNumber(value, 1)} days`,
-    highlight: leaders.map((item) => item.city)
+    highlight: leaders.map((item) => item.city),
+    axisLabel: "Median days on market (days)"
   });
   renderDetail("q8", ["City", "Median days on market", "Sales with both dates"], summaries
     .slice().sort((a, b) => a.city.localeCompare(b.city))
@@ -859,16 +904,22 @@ function renderQuestions(rows) {
   const q10Beds = createNumberControl(q10Controls, "q10-min-beds", "Minimum bedrooms", q10MinimumBeds, "1");
   const maxDistance = Math.max(...rows.map((row) => numberValue(row, "miles_to_campus")).filter(Number.isFinite));
 
-  renderQ1(rows, cities);
-  renderQ2(rows, cities);
-  renderQ3(rows);
-  renderQ4(rows, areas);
-  renderQ5(rows, areas);
-  renderQ6(rows, areas);
   const updateQ7 = () => renderQ7(rows, cities, Number(q7Beds.value));
   const updateQ8 = () => renderQ8(rows, cities, inputNumber(q8Min), inputNumber(q8Max));
   const updateQ9 = () => renderQ9(rows, q9City.value, Number(q9Year.value));
   const updateQ10 = () => renderQ10(rows, q10Campus.value, inputNumber(q10Budget), inputNumber(q10Beds), maxDistance);
+  const renderAllQuestions = () => {
+    renderQ1(rows, cities);
+    renderQ2(rows, cities);
+    renderQ3(rows);
+    renderQ4(rows, areas);
+    renderQ5(rows, areas);
+    renderQ6(rows, areas);
+    updateQ7();
+    updateQ8();
+    updateQ9();
+    updateQ10();
+  };
   const syncQuestionParams = () => {
     const params = new URLSearchParams(window.location.search);
     params.set("q7Beds", q7Beds.value);
@@ -890,10 +941,18 @@ function renderQuestions(rows) {
   q10Campus.addEventListener("change", () => { updateQ10(); syncQuestionParams(); });
   q10Budget.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
   q10Beds.addEventListener("input", () => { updateQ10(); syncQuestionParams(); });
-  updateQ7();
-  updateQ8();
-  updateQ9();
-  updateQ10();
+  renderAllQuestions();
+  let compactCharts = window.matchMedia("(max-width: 60rem)").matches;
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      const nextLayout = window.matchMedia("(max-width: 60rem)").matches;
+      if (nextLayout === compactCharts) return;
+      compactCharts = nextLayout;
+      renderAllQuestions();
+    }, 120);
+  });
   document.querySelector("#questions").hidden = false;
 }
 
