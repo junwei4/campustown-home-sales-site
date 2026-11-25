@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Home sale prices by city</title>
+  <title>College-town home sales</title>
   <link rel="icon" href="data:,">
   <style>
     :root {
@@ -101,6 +101,91 @@
       main { padding-top: 2rem; }
       th, td { padding: 0.75rem; }
     }
+
+    .question-list {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .question {
+      min-width: 0;
+      padding: clamp(1rem, 3vw, 1.75rem);
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 0.6rem;
+      box-shadow: 0 0.4rem 1.5rem rgb(29 39 51 / 7%);
+    }
+
+    .question h2 { margin: 0 0 0.5rem; }
+    .question-prompt { margin-top: 0; color: var(--muted); }
+    .answer { font-weight: 650; }
+    .explanation { color: var(--muted); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: end;
+      margin: 1rem 0;
+    }
+
+    .control {
+      display: grid;
+      gap: 0.25rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .control input, .control select {
+      min-width: 10rem;
+      padding: 0.5rem;
+      border: 1px solid #9aa8b4;
+      border-radius: 0.3rem;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    .chart-frame {
+      margin: 1.25rem 0;
+      overflow-x: auto;
+    }
+
+    .chart-frame figcaption {
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .chart svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+      font-family: inherit;
+    }
+
+    .chart .axis, .chart .grid-line {
+      stroke: #9aa8b4;
+      stroke-width: 1;
+    }
+
+    .chart .grid-line { stroke: #e4e9ed; }
+    .chart .axis-label { fill: var(--muted); font-size: 12px; }
+    .chart .data-label { fill: var(--ink); font-size: 12px; }
+    .chart .bar { fill: var(--accent); }
+    .chart .bar.negative { fill: #b24c36; }
+    .chart .point { fill: var(--accent); stroke: white; stroke-width: 2; }
+
+    .detail { overflow-x: auto; }
+    .detail table { min-width: 34rem; }
+    .detail td { white-space: nowrap; }
+    .detail td:first-child { white-space: normal; }
+
+    @media (max-width: 42rem) {
+      .question-list { gap: 1rem; }
+      .question { padding: 1rem; }
+    }
   </style>
 </head>
 <body>
@@ -109,6 +194,7 @@
       <h1>Home sale prices by city</h1>
       <p class="intro">The highest three sale prices, median, and mean for each college town.</p>
       <p class="method"><strong>Rule:</strong> sales under $10,000 are left out before calculating these summaries.</p>
+      <p class="intro">Below, ten questions use the full dataset or the question-specific filters described in each section. Q1–Q6 do not change with the interactive controls in Q7–Q10.</p>
     </header>
 
     <p id="status" role="status">Loading sales data…</p>
@@ -130,125 +216,128 @@
       </table>
     </div>
 
+    <div id="questions" class="question-list" hidden>
+      <section class="question" id="q1">
+        <h2>Q1. Which city has the highest median sale price?</h2>
+        <p class="question-prompt">Median prices use valid sales from $10,000 to $5,000,000, inclusive.</p>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Median sale price by city</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q2">
+        <h2>Q2. Which city's mean is furthest above its median?</h2>
+        <p class="question-prompt">Uses all rows, with no price rule. Gap = (mean − median) ÷ median.</p>
+        <p class="answer"></p>
+        <p class="explanation"></p>
+        <figure class="chart-frame">
+          <figcaption>Each point is a city's median (horizontal) and mean (vertical); hover or focus a point for exact values.</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q3">
+        <h2>Q3. How do city mean-price ranks change with the price rule?</h2>
+        <p class="question-prompt">Compares all rows against valid prices from $10,000 to $5,000,000, inclusive. Rank 1 is the highest mean.</p>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>City ranks with all rows and with valid prices</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q4">
+        <h2>Q4. How did median sale prices change by campus area?</h2>
+        <p class="question-prompt">Percent change from 2024 to 2025, using valid prices and sale dates.</p>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Percent change in median sale price (2024 to 2025)</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q5">
+        <h2>Q5. What is the median days on market by campus area?</h2>
+        <p class="question-prompt">Days on market is contract date minus list date; rows missing either date are excluded. Prices must be valid.</p>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Median days on market by campus area</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q6">
+        <h2>Q6. What is the annual property-tax burden by campus area?</h2>
+        <p class="question-prompt">Sum of eligible annual tax divided by sum of sale prices. Includes valid prices and tax greater than $0 but less than 10% of sale price.</p>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Eligible annual property tax as a percent of eligible total sale price</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q7">
+        <h2>Q7. For a selected bedroom count, which city has the lowest median sale price?</h2>
+        <p class="question-prompt">Uses exactly the selected number of bedrooms and valid prices.</p>
+        <div class="controls"></div>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Median sale price and sales count by city</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q8">
+        <h2>Q8. For a selected price range, which city has the shortest median days on market?</h2>
+        <p class="question-prompt">Range endpoints are inclusive and are bounded by the valid-price scope ($10,000–$5,000,000). Rows need both list and contract dates.</p>
+        <div class="controls"></div>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Median days on market and sales count by city</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q9">
+        <h2>Q9. How many sales were recorded in each month?</h2>
+        <p class="question-prompt">Uses all rows with a sale date, without a price rule.</p>
+        <div class="controls"></div>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Sales by sale-date month</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+
+      <section class="question" id="q10">
+        <h2>Q10. What is the median distance to campus for qualifying sales?</h2>
+        <p class="question-prompt">Select a campus area, maximum budget, and minimum bedroom count. The price scope remains $10,000–$5,000,000, inclusive.</p>
+        <div class="controls"></div>
+        <p class="answer"></p>
+        <figure class="chart-frame">
+          <figcaption>Median miles to campus for qualifying sales</figcaption>
+          <div class="chart"></div>
+        </figure>
+        <div class="detail"></div>
+      </section>
+    </div>
+
     <footer>
       <p>Source: College-town home sales dataset, version 1.0 (2026). Data collected March 2026.</p>
     </footer>
   </main>
 
-  <script>
-    const DATA_PATH = "data/college_town_home_sales.csv";
-    const MINIMUM_SALE_PRICE = 10000;
-
-    function parseCsv(text) {
-      const rows = [];
-      let row = [];
-      let value = "";
-      let quoted = false;
-
-      for (let i = 0; i < text.length; i += 1) {
-        const character = text[i];
-        const next = text[i + 1];
-        if (character === '"' && quoted && next === '"') {
-          value += '"';
-          i += 1;
-        } else if (character === '"') {
-          quoted = !quoted;
-        } else if (character === "," && !quoted) {
-          row.push(value);
-          value = "";
-        } else if ((character === "\n" || character === "\r") && !quoted) {
-          if (character === "\r" && next === "\n") i += 1;
-          row.push(value);
-          if (row.some((cell) => cell !== "")) rows.push(row);
-          row = [];
-          value = "";
-        } else {
-          value += character;
-        }
-      }
-
-      if (value || row.length) {
-        row.push(value);
-        rows.push(row);
-      }
-      return rows;
-    }
-
-    function median(values) {
-      const sorted = values.slice().sort((a, b) => a - b);
-      const middle = Math.floor(sorted.length / 2);
-      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-    }
-
-    function mean(values) {
-      return values.reduce((total, value) => total + value, 0) / values.length;
-    }
-
-    function formatCurrency(value) {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0
-      }).format(value);
-    }
-
-    function render(rows) {
-      const headers = rows[0];
-      const cityIndex = headers.indexOf("city");
-      const priceIndex = headers.indexOf("sale_price");
-      const byCity = new Map();
-
-      rows.slice(1).forEach((row) => {
-        const city = row[cityIndex];
-        const price = Number(row[priceIndex]);
-        if (city && Number.isFinite(price) && price >= MINIMUM_SALE_PRICE) {
-          if (!byCity.has(city)) byCity.set(city, []);
-          byCity.get(city).push(price);
-        }
-      });
-
-      const body = document.querySelector("#results tbody");
-      [...byCity.entries()]
-        .sort(([cityA], [cityB]) => cityA.localeCompare(cityB))
-        .forEach(([city, prices]) => {
-          const row = document.createElement("tr");
-          const cityCell = document.createElement("th");
-          cityCell.scope = "row";
-          cityCell.textContent = city;
-          const countCell = document.createElement("td");
-          countCell.textContent = prices.length.toLocaleString("en-US");
-          const sortedPrices = prices.slice().sort((a, b) => b - a);
-          const summary = [
-            sortedPrices[0],
-            sortedPrices[1],
-            sortedPrices[2],
-            median(prices),
-            mean(prices)
-          ];
-          const priceCells = summary.map((value) => {
-            const cell = document.createElement("td");
-            cell.className = "price";
-            cell.textContent = formatCurrency(value);
-            return cell;
-          });
-          row.append(cityCell, countCell, ...priceCells);
-          body.append(row);
-        });
-
-      document.querySelector("#status").textContent =
-        `${byCity.size} cities from ${rows.length - 1} sales, summarized after the $10,000 cutoff.`;
-      document.querySelector("#results").hidden = false;
-    }
-
-    fetch(DATA_PATH)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Could not load sales data (${response.status}).`);
-        return response.text();
-      })
-      .then((text) => render(parseCsv(text)))
-      .catch((error) => {
-        document.querySelector("#status").textContent = `Unable to load the sales data: ${error.message}`;
-      });
-  </script>
+  <script src="app.js" defer></script>
 </body>
 </html>

@@ -1,10 +1,11 @@
-# Home sale prices by city
+# College-town home sales
 
 ## What this site is for
 
-This site helps people compare home sale prices across the college towns in the
-dataset. It shows the three highest qualifying sale prices, the median, the mean,
-and the number of qualifying sales for each city.
+This site keeps the original city summary table and adds ten data-driven answers
+about home prices, campus areas, time on market, taxes, and monthly sales. Q7–Q10
+include visitor controls; their answers and charts recalculate from the selected
+values.
 
 ## Live site
 
@@ -12,22 +13,26 @@ https://junwei4.github.io/campustown-home-sales-site/
 
 ## Data notes
 
-The page reads `data/college_town_home_sales.csv` in the browser. It includes all
-35,442 source rows and 18 cities. Sales under $10,000 are excluded before
-calculating the summaries; 35,402 sales remain. The three highest prices are
-selected after filtering, while the median and mean use every qualifying sale in
-that city. Values are formatted as whole-dollar US currency.
+The page reads `data/college_town_home_sales.csv` in the browser. The original
+table continues to exclude sales under $10,000 and shows each city's three
+highest prices, median, mean, and count. The question sections apply the
+question-specific rules shown on the page: the standard valid-price scope is
+$10,000–$5,000,000 inclusive, Q2 uses all rows, Q3 compares all rows with valid
+prices, and Q9 uses all rows with a sale date. Q7 and Q8 use inclusive visitor
+inputs within the valid-price scope; Q10 also applies its campus and bedroom
+settings. Q1–Q6 do not change when the Q7–Q10 controls change.
 
-The $10,000 cutoff addresses the implausible low sale prices described in
-`docs/data_description_sheet.md`. The page does not deduplicate repeated
-addresses or use the unreliable `home_type` field.
+Days on market is calculated as `contract_date` minus `list_date`, and rows
+missing either date are excluded from those summaries. The page does not
+deduplicate repeated addresses or use the unreliable `home_type` field. See
+`docs/data_description_sheet.md` for the dataset caveats and field definitions.
 
 ## Tools we used
 
 The site uses plain HTML, CSS, and JavaScript with no build step or external
-libraries. The browser loads and parses the CSV, computes each city's summaries,
-and renders a responsive table. GitHub Pages publishes the repository root using
-`.github/workflows/pages.yml`.
+libraries. `app.js` loads and parses the CSV once, computes the legacy table and
+the ten question answers, and renders responsive tables and SVG charts. GitHub
+Pages publishes the repository root using `.github/workflows/pages.yml`.
 
 ## Citation
 
