@@ -349,7 +349,7 @@
     const width = compact ? 480 : 900;
     const height = compact ? 390 : 480;
     const padding = compact
-      ? { top: 16, right: 14, bottom: 48, left: 42 }
+      ? { top: 16, right: 14, bottom: 48, left: 72 }
       : { top: 24, right: 24, bottom: 52, left: 62 };
     const plotWidth = width - padding.left - padding.right;
     const plotHeight = height - padding.top - padding.bottom;
@@ -386,7 +386,7 @@
       }, `${(maxLat - fraction * (maxLat - minLat)).toFixed(1)}°`);
     }
 
-    const locationCounts = new Map();
+    const placedLabels = [];
     cityLocations.forEach((location) => {
       const cx = x(location.longitude);
       const cy = y(location.latitude);
@@ -405,12 +405,59 @@
         cx, cy, r: compact ? (selected ? 10 : 8) : (selected ? 8 : 6), class: "map-point"
       });
       point.setAttribute("aria-hidden", "true");
-      const labelCount = locationCounts.get(`${Math.round(cx / 60)}-${Math.round(cy / 35)}`) || 0;
-      locationCounts.set(`${Math.round(cx / 60)}-${Math.round(cy / 35)}`, labelCount + 1);
-      const offsetY = labelCount * 13;
+      const cityLabel = location.city.split(",")[0];
+      const labelWidth = cityLabel.length * 7;
+      const rightRoom = width - cx - 10;
+      const leftRoom = cx - 10;
+      const preferredRight = rightRoom >= labelWidth || (leftRoom < labelWidth && rightRoom >= leftRoom);
+      const labelSides = preferredRight ? [true, false] : [false, true];
+      const verticalOffsets = [0];
+      for (let offset = 14; offset <= 140; offset += 14) verticalOffsets.push(-offset, offset);
+      let placement;
+      for (const offset of verticalOffsets) {
+        const baseline = cy + 4 + offset;
+        if (baseline - 9 < padding.top || baseline + 3 > height - padding.bottom) continue;
+        for (const onRight of labelSides) {
+          const labelX = cx + (onRight ? 9 : -9);
+          const left = onRight ? labelX : labelX - labelWidth;
+          const right = onRight ? labelX + labelWidth : labelX;
+          const overlaps = placedLabels.some((label) =>
+            left < label.right + 4 && right > label.left - 4 &&
+            baseline - 9 < label.bottom + 2 && baseline + 3 > label.top - 2
+          );
+          if (left < 2 || right > width - 2 || overlaps) continue;
+          placement = { x: labelX, y: baseline, onRight, left, right, top: baseline - 9, bottom: baseline + 3 };
+          break;
+        }
+        if (placement) break;
+      }
+      if (!placement) {
+        const onRight = preferredRight;
+        const labelX = cx + (onRight ? 9 : -9);
+        const baseline = Math.max(padding.top + 10, Math.min(height - padding.bottom - 3, cy + 4));
+        placement = {
+          x: labelX, y: baseline, onRight,
+          left: onRight ? labelX : labelX - labelWidth,
+          right: onRight ? labelX + labelWidth : labelX,
+          top: baseline - 9, bottom: baseline + 3
+        };
+      }
+      placedLabels.push(placement);
+      if (Math.abs(placement.y - (cy + 4)) > 14) {
+        makeSvgElement(group, "line", {
+          x1: cx + (placement.onRight ? 6 : -6),
+          y1: cy + 1,
+          x2: placement.onRight ? placement.left - 3 : placement.right + 3,
+          y2: placement.y - 3,
+          class: "map-label-line"
+        });
+      }
       makeSvgElement(group, "text", {
-        x: cx + 9, y: cy + 4 + offsetY, class: "map-label"
-      }, location.city.split(",")[0]);
+        x: placement.x,
+        y: placement.y,
+        "text-anchor": placement.onRight ? "start" : "end",
+        class: "map-label"
+      }, cityLabel);
       const chooseCity = () => {
         if (!active) return;
         state.city = location.city;

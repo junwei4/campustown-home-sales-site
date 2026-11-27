@@ -229,7 +229,8 @@ function renderHorizontalChart(container, items, options) {
   const compact = window.matchMedia("(max-width: 60rem)").matches;
   const width = compact ? 420 : 1200;
   const marginLeft = compact ? 150 : 430;
-  const plotWidth = compact ? 210 : 610;
+  const rightMargin = compact ? 96 : 150;
+  const plotWidth = width - marginLeft - rightMargin;
   const top = 18;
   const rowHeight = compact ? 39 : 29;
   const bottom = compact ? 62 : 54;
@@ -290,12 +291,9 @@ function renderHorizontalChart(container, items, options) {
       class: `${item.value < 0 ? "bar negative" : "bar"}${options.highlight ? (isHighlighted ? " highlight" : " quiet") : ""}`
     });
     addTooltip(rect, `${item.label}: ${options.format(item.value)}${item.count === undefined ? "" : `; ${formatCount(item.count)} sales`}`);
-    const nearRightEdge = valueX > width - (compact ? 82 : 170);
-    const labelX = item.value < 0 || nearRightEdge ? valueX - 8 : valueX + 8;
     svgNode(svg, "text", {
-      x: labelX, y: centerY + 4,
-      "text-anchor": item.value < 0 || nearRightEdge ? "end" : "start",
-      class: `data-label${isHighlighted ? " highlight-label" : ""}`
+      x: marginLeft + plotWidth + 8, y: centerY + 4,
+      class: `data-label chart-value${isHighlighted ? " highlight-label" : ""}`
     }, options.format(item.value));
   });
 }
