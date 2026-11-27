@@ -366,7 +366,12 @@
         min-width: 0;
       }
 
-      #results thead, #explore-results thead, .detail thead {
+      #insight-price-table {
+        display: block;
+        width: 100%;
+      }
+
+      #results thead, #explore-results thead, .detail thead, #insight-price-table thead {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -376,13 +381,13 @@
         clip-path: inset(50%);
       }
 
-      #results tbody, #explore-results tbody, .detail tbody {
+      #results tbody, #explore-results tbody, .detail tbody, #insight-price-table tbody {
         display: grid;
         gap: 0.55rem;
         padding: 0.6rem;
       }
 
-      #results tr, #explore-results tr, .detail tr {
+      #results tr, #explore-results tr, .detail tr, #insight-price-table tr {
         display: block;
         min-width: 0;
         border: 1px solid var(--line);
@@ -390,7 +395,7 @@
         background: var(--surface);
       }
 
-      #results th, #results td, #explore-results th, #explore-results td, .detail th, .detail td {
+      #results th, #results td, #explore-results th, #explore-results td, .detail th, .detail td, #insight-price-table th, #insight-price-table td {
         display: flex;
         width: 100%;
         justify-content: space-between;
@@ -401,7 +406,7 @@
         white-space: normal;
       }
 
-      #results td::before, #explore-results td::before, .detail td::before {
+      #results td::before, #explore-results td::before, .detail td::before, #insight-price-table td::before {
         flex: 0 1 48%;
         color: var(--muted);
         content: attr(data-label);
@@ -623,6 +628,27 @@
         <div class="detail"></div>
       </section>
     </div>
+
+    <section id="insights" class="question-list" hidden aria-labelledby="insights-title">
+      <h2 id="insights-title">Insights</h2>
+      <article class="question" aria-labelledby="insight-p1-title">
+        <h3 id="insight-p1-title">P1. Data quality: extreme sale prices</h3>
+        <p id="insight-p1-answer"></p>
+        <div class="table-wrap">
+          <table id="insight-price-table">
+            <caption>How the standard price scope changes dataset-wide sale-price summaries.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure</th>
+                <th scope="col">All recorded prices</th>
+                <th scope="col">$10,000–$5,000,000</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
 
     <section id="methods" class="panel methods" aria-labelledby="methods-title">
       <h2 id="methods-title">Data and methods</h2>

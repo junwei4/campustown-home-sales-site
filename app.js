@@ -862,6 +862,68 @@ function renderQ10(rows, campus, budget, minBeds, maxDistance) {
     : [], "No sales meet the selected conditions.");
 }
 
+function renderPriceQualityInsight(rows) {
+  const pricedRows = rows.map((row) => ({ row, price: numberValue(row, "sale_price") }))
+    .filter((item) => Number.isFinite(item.price));
+  const inScopeRows = pricedRows.filter((item) =>
+    item.price >= MINIMUM_SALE_PRICE && item.price <= MAXIMUM_SALE_PRICE
+  );
+  const allPrices = pricedRows.map((item) => item.price);
+  const inScopePrices = inScopeRows.map((item) => item.price);
+  const belowScope = pricedRows.filter((item) => item.price < MINIMUM_SALE_PRICE).length;
+  const aboveScope = pricedRows.filter((item) => item.price > MAXIMUM_SALE_PRICE).length;
+
+  const allByCity = groupBy(pricedRows, (item) => cityName(item.row));
+  const scopedByCity = groupBy(inScopeRows, (item) => cityName(item.row));
+  const cityChanges = [...allByCity.entries()].map(([city, allItems]) => {
+    const scopedItems = scopedByCity.get(city) || [];
+    const allMedian = median(allItems.map((item) => item.price));
+    const scopedMedian = median(scopedItems.map((item) => item.price));
+    return {
+      city,
+      allMedian,
+      scopedMedian,
+      allCount: allItems.length,
+      scopedCount: scopedItems.length,
+      change: scopedMedian - allMedian
+    };
+  }).filter((item) => Number.isFinite(item.scopedMedian));
+  const largestMedianChange = Math.max(...cityChanges.map((item) => Math.abs(item.change)));
+  const largestMedianChanges = cityChanges.filter((item) => Math.abs(item.change) === largestMedianChange);
+  const cityEffect = largestMedianChanges.map((item) => {
+    const change = item.change === 0
+      ? "no change"
+      : `${item.change > 0 ? "an increase" : "a decrease"} of ${formatCurrency(Math.abs(item.change))} (${formatNumber(Math.abs(item.change / item.allMedian * 100), 1)}%)`;
+    return `${item.city}, where the median moved from ${formatCurrency(item.allMedian)} across ${formatCount(item.allCount)} sales to ${formatCurrency(item.scopedMedian)} across ${formatCount(item.scopedCount)} in-scope sales, ${change}`;
+  }).join("; ");
+  const meanDecrease = mean(allPrices) - mean(inScopePrices);
+  const meanDecreasePercent = meanDecrease / mean(allPrices) * 100;
+  const answer = document.querySelector("#insight-p1-answer");
+  answer.textContent = `The data description flags sale-price extremes as a quality concern: recorded prices include a ${formatCurrency(Math.min(...allPrices))} sale and values as high as ${formatCurrency(Math.max(...allPrices))}. I applied the site's inclusive ${formatCurrency(MINIMUM_SALE_PRICE)}–${formatCurrency(MAXIMUM_SALE_PRICE)} price scope rather than assuming every excluded sale is erroneous; the source notes that some high sales may be genuine luxury homes. Of ${formatCount(pricedRows.length)} recorded prices, ${formatCount(belowScope)} are below the lower limit and ${formatCount(aboveScope)} exceed the upper limit, leaving ${formatCount(inScopeRows.length)} in scope.\n\nAcross all records, the mean sale price is ${formatCurrency(mean(allPrices))}; under the scope it is ${formatCurrency(mean(inScopePrices))}, a decrease of ${formatCurrency(meanDecrease)} (${formatNumber(meanDecreasePercent, 1)}%). The overall median remains ${formatCurrency(median(allPrices))}. That contrast shows why extreme values matter more to the mean: it responds to every price, while the median depends on the middle sale or sales. City medians can still shift: the largest absolute movement was ${cityEffect}.\n\nThese figures show the scope changes averages and some local summaries without changing the overall midpoint. The cutoff makes comparisons consistent, but it is an analysis boundary, not proof that each excluded sale is false. Excluding high prices can omit legitimate luxury transactions, so these results describe the scoped market rather than every price segment.`;
+
+  const tableBody = document.querySelector("#insight-price-table tbody");
+  tableBody.replaceChildren();
+  [
+    ["Sales included", formatCount(pricedRows.length), formatCount(inScopeRows.length)],
+    ["Mean sale price", formatCurrency(mean(allPrices)), formatCurrency(mean(inScopePrices))],
+    ["Median sale price", formatCurrency(median(allPrices)), formatCurrency(median(inScopePrices))]
+  ].forEach(([measure, allValue, scopedValue]) => {
+    const row = document.createElement("tr");
+    const heading = document.createElement("th");
+    heading.scope = "row";
+    heading.textContent = measure;
+    const allCell = document.createElement("td");
+    allCell.textContent = allValue;
+    allCell.dataset.label = "All recorded prices";
+    const scopedCell = document.createElement("td");
+    scopedCell.textContent = scopedValue;
+    scopedCell.dataset.label = "$10,000–$5,000,000";
+    row.append(heading, allCell, scopedCell);
+    tableBody.append(row);
+  });
+  document.querySelector("#insights").hidden = false;
+}
+
 function renderQuestions(rows) {
   const cities = uniqueSorted(rows.map(cityName));
   const areas = uniqueSorted(rows.map((row) => row.university));
@@ -1006,6 +1068,7 @@ fetch(DATA_PATH)
     if (!rows.length) throw new Error("The sales data file is empty.");
     renderLegacyTable(rows);
     renderQuestions(rows);
+    renderPriceQualityInsight(rows);
     document.dispatchEvent(new CustomEvent("sales:loaded", { detail: { rows } }));
   })
   .catch((error) => {
